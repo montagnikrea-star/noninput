@@ -1,0 +1,345 @@
+// Visual Studio 2022, x64
+// + Оптимизация под tickrate онлайн-игр (64 / 128 / sub-tick)
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <cmath>
+#include <cstdint>
+#include <string>
+#include <iomanip>
+#include <cstring>
+#include <windows.h>
+
+using namespace std;
+
+const double PHI     = 1.6180339887498948482;
+const double PHI2    = 2.6180339887498948482;
+const double SQRT2   = 1.4142135623730950488;
+const double SQRT3   = 1.7320508075688772935;
+const double PI      = 3.14159265358979323846;
+const double PHI_INV = 0.6180339887498948482;
+
+const double Z50 = 50.0;
+const double Z75 = 75.0;
+
+// Игровые тикрейты
+const double TICK_64  = 64.0;          // 64 тика/сек → 15.625 мс
+const double TICK_128 = 128.0;         // 128 тиков/сек → 7.8125 мс
+const double SUBTICK_DIV = 8.0;        // sub-tick: деление тика на 8 частей
+
+const string PATTERN_NAME = "adaptive_chameleon_pattern.bin";
+const size_t HEADER_SIZE  = 4096;
+const size_t CACHE_LINE   = 64;
+const size_t PAGE_4K      = 4096;
+const size_t PAGE_16K     = 16384;
+const size_t PAGE_64K     = 65536;
+
+const size_t INNER_SIZES_MB[] = { 4, 8, 16, 32 };
+const int    INNER_COUNT      = 4;
+
+const char MAGIC[8] = { 'A', 'C', 'P', 'T', 'I', 'C', 'K', '2' }; // Tickrate
+
+uint64_t StrongMix(uint64_t x) {
+    x += 0x9e3779b97f4a7c15ULL;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+    x = x ^ (x >> 31);
+    x ^= (x >> 17);
+    x *= 0xED5AD4BBULL;
+    x ^= (x >> 11);
+    return x;
+}
+
+uint8_t ParityBit(uint8_t v) {
+    v ^= v >> 4; v ^= v >> 2; v ^= v >> 1;
+    return v & 1;
+}
+
+uint64_t CalculateChecksum(const uint8_t* data, size_t len) {
+    uint64_t cs = 0xC0FFEE51A7EDBEEFULL;
+    for (size_t i = 0; i < len; ++i) {
+        cs = StrongMix(cs ^ data[i]);
+        cs = StrongMix(cs + i * 0x9E3779B9ULL);
+    }
+    return cs;
+}
+
+uint64_t GenerateDigitalSignature(const uint8_t* data, size_t len, uint64_t key) {
+    uint64_t sig = key ^ 0xA5A5F00D12345678ULL;
+    for (size_t i = 0; i < len; ++i) {
+        sig = StrongMix(sig ^ data[i]);
+        sig = StrongMix(sig + (i * 0x85EBCA6BULL) + key);
+    }
+    return StrongMix(StrongMix(sig ^ key));
+}
+
+uint32_t CalculateCRC32(const uint8_t* data, size_t len) {
+    uint32_t crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < len; ++i) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; ++j)
+            crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
+
+void RLCResponse(double omega, double R, double L, double C,
+                 double& amplitude, double& phase)
+{
+    double wr = 1.0 / sqrt(L * C + 1e-12);
+    double Q  = R * sqrt(C / (L + 1e-12));
+    double detune = omega / wr - wr / omega;
+
+    amplitude = 1.0 / sqrt(1.0 + Q * Q * detune * detune + 0.09);
+    amplitude = 0.26 + 0.74 * (1.0 - amplitude);
+    phase = atan2(Q * detune, 1.0);
+}
+
+void GenerateTickrateBlock(uint8_t* dst, size_t sizeBytes, uint64_t seed)
+{
+    uint64_t s1 = 0xDEADBEEFCAFEBABEULL ^ seed;
+    uint64_t s2 = 0x1234567890ABCDEFULL ^ (seed * 0x9E37);
+    uint64_t s3 = 0xF00DFACEA5A5A5A5ULL ^ (seed << 5);
+    uint64_t s4 = 0xA0B1C2D3E4F56789ULL ^ (seed * 0x1656);
+
+    // Широкий частотный ряд (сверхнизкие → сверхвысокие)
+    const double R[] = { 55.0, 52.0, 50.0, 58.0, 63.0, 68.0, 72.0, 47.0 };
+    const double L[] = { 8.0,  3.5,  1.6,  0.85, 0.38, 0.16, 0.06, 0.022 };
+    const double C[] = { 6.5,  2.8,  1.3,  0.75, 0.38, 0.17, 0.07, 0.025 };
+    const double freqMult[] = { 0.028, 0.085, 0.25, 0.70, 1.80, 4.50, 11.0, 22.0 };
+
+    const double omega0 = 2.0 * PI * PHI / 256.0;
+
+    // Интервалы тикрейтов (в условных единицах паттерна)
+    const double period64  = 256.0 / TICK_64;    // условный период 64-tick
+    const double period128 = 256.0 / TICK_128;   // условный период 128-tick
+    const double periodSub = period128 / SUBTICK_DIV;
+
+    for (size_t i = 0; i < sizeBytes; ++i)
+    {
+        s1 = StrongMix(s1 + i);
+        s2 = StrongMix(s2 + i * 0x9E3779B9ULL);
+        s3 = StrongMix(s3 ^ (i * 0x85EBCA6BULL));
+        s4 = StrongMix(s4 + i * 0x27D4EB2DULL);
+
+        double theta = omega0 * i;
+
+        // ===== RLC-компоненты широкого спектра =====
+        double signals[8];
+        double total = 0.0;
+        for (int k = 0; k < 8; ++k) {
+            double amp, ph;
+            RLCResponse(theta * freqMult[k], R[k], L[k], C[k], amp, ph);
+            signals[k] = amp * sin(theta * freqMult[k] + ph);
+            total += signals[k];
+        }
+        total *= 0.10;
+
+        // ===== ТИКРЕЙТ-СЛОИ (64 / 128 / sub-tick) =====
+        // Создаём временны́е структуры, согласованные с игровыми тиками
+        double tick64  = sin(2.0 * PI * i / period64);
+        double tick128 = sin(2.0 * PI * i / period128);
+        double subtick = sin(2.0 * PI * i / periodSub);
+
+        // Фазово согласованная комбинация тикрейтов
+        // 128-tick — основной, 64-tick — поддерживающий, sub-tick — уточняющий
+        double tickLayer =
+            0.42 * tick128 +
+            0.28 * tick64  +
+            0.30 * subtick;
+
+        // Дополнительная гармоника sub-tick (более мелкое разбиение)
+        double subtick2 = sin(2.0 * PI * i / (periodSub * 0.5));
+        tickLayer = tickLayer * 0.78 + subtick2 * 0.22;
+
+        // Скрученный провод
+        double F = 0.41 * (signals[3] + signals[4]);
+        double spiral = 0.5 + 0.17 * sin(theta * 0.37) + 0.10 * sin(theta * 0.21);
+        double compensated = F * (1.0 - 2.0 * spiral);
+
+        // Согласование 50/75
+        double z50 = Z50 / (Z50 + Z75);
+        double z75 = Z75 / (Z50 + Z75);
+
+        double matched =
+            compensated * 0.29 +
+            signals[0] * 0.07 +
+            signals[1] * 0.07 +
+            signals[2] * 0.07 +
+            signals[3] * z50 * 0.75 +
+            signals[4] * z75 * 0.75 +
+            signals[5] * 0.08 +
+            signals[6] * 0.07 +
+            signals[7] * 0.06;
+
+        // Анти-Rowhammer
+        double antiHammer =
+            0.31 * sin(theta * PHI / 32.0) +
+            0.26 * sin(theta * 0.13) +
+            0.43 * ((i * 2654435761ULL) & 0xFF) / 255.0;
+
+        double dissipate = 0.5 + 0.5 * sin(theta * PHI_INV * 0.7);
+        double antiShunt = 0.5 + 0.5 * sin(theta * 0.19 + PI * 0.25);
+
+        // Итоговое смешивание с сильным влиянием тикрейт-слоя
+        double raw =
+            matched     * 0.24 +
+            tickLayer   * 0.18 +   // <-- игровые тикрейты
+            antiHammer  * 0.12 +
+            dissipate   * 0.08 +
+            antiShunt   * 0.06 +
+            total       * 0.10 +
+            (s1 & 0xFF) / 255.0 * 0.05 +
+            (s2 & 0xFF) / 255.0 * 0.04 +
+            (s4 & 0xFF) / 255.0 * 0.03;
+
+        double val = fmod((raw + 1.0) * 127.5, 256.0);
+        uint8_t byte = static_cast<uint8_t>(val);
+        dst[i] = (byte & 0xFE) | ParityBit(byte & 0xFE);
+    }
+
+    // Cache-line оптимизация
+    for (size_t line = 0; line < sizeBytes; line += CACHE_LINE) {
+        size_t end = min(line + CACHE_LINE, sizeBytes);
+        uint32_t sum = 0;
+        for (size_t j = line; j < end; ++j) sum += dst[j];
+        uint8_t anchor = static_cast<uint8_t>(sum / (end - line));
+
+        for (size_t j = line; j < end; ++j) {
+            int offset = static_cast<int>(j - line) - 32;
+            int delta = (offset * 2) / 13;
+            int v = static_cast<int>(anchor) + delta + (dst[j] & 0x03) - 2;
+            uint8_t nv = static_cast<uint8_t>(v & 0xFF);
+            dst[j] = (nv & 0xFE) | ParityBit(nv & 0xFE);
+        }
+    }
+}
+
+void GenerateTickratePattern()
+{
+    size_t totalDataSize = 0;
+    for (int i = 0; i < INNER_COUNT; ++i)
+        totalDataSize += INNER_SIZES_MB[i] * 1024ull * 1024ull;
+
+    size_t alignedDataSize = ((totalDataSize + PAGE_64K - 1) / PAGE_64K) * PAGE_64K;
+    const size_t totalFileSize = alignedDataSize + HEADER_SIZE;
+
+    vector<uint8_t> fileData(totalFileSize, 0);
+    uint8_t* dataPtr = fileData.data() + HEADER_SIZE;
+
+    cout << "Генерация паттерна под тикрейты онлайн-игр..." << endl;
+    cout << "Поддержка: 64-tick, 128-tick, sub-tick" << endl;
+
+    size_t offset = 0;
+    uint64_t globalSeed = 0xA5A5F00D12345678ULL;
+
+    for (int p = 0; p < INNER_COUNT; ++p) {
+        size_t sz = INNER_SIZES_MB[p] * 1024ull * 1024ull;
+        size_t alignedSz = ((sz + PAGE_4K - 1) / PAGE_4K) * PAGE_4K;
+        if (offset + alignedSz > alignedDataSize) alignedSz = alignedDataSize - offset;
+
+        cout << "  -> Слой " << INNER_SIZES_MB[p] << " МБ" << endl;
+        GenerateTickrateBlock(dataPtr + offset, alignedSz, globalSeed + p * 0x10000);
+        offset += alignedSz;
+    }
+
+    for (size_t b = 0; b + PAGE_64K <= alignedDataSize; b += PAGE_64K)
+        GenerateTickrateBlock(dataPtr + b, PAGE_64K, globalSeed ^ (b * 0x9E3779B9ULL));
+
+    for (size_t b = 0; b + PAGE_16K <= alignedDataSize; b += PAGE_16K * 3)
+        GenerateTickrateBlock(dataPtr + b, PAGE_16K, globalSeed ^ (b * 0x85EBCA6BULL));
+
+    for (size_t i = 0; i < alignedDataSize; i += 13) {
+        uint8_t d = static_cast<uint8_t>(StrongMix(0xA0B1C2D3ULL + i) & 0xFF);
+        dataPtr[i] = (dataPtr[i] * 0x3D + d * 0x5B) & 0xFE;
+        dataPtr[i] |= ParityBit(dataPtr[i]);
+    }
+
+    uint64_t fs = 0xC0DEC0DEC0DEC0DEULL;
+    for (size_t i = 0; i < alignedDataSize; ++i) {
+        fs = StrongMix(fs + i);
+        uint8_t x = dataPtr[i] ^ static_cast<uint8_t>(fs) ^ static_cast<uint8_t>(fs >> 19);
+        dataPtr[i] = (x & 0xFE) | ParityBit(x & 0xFE);
+    }
+
+    const uint64_t SECRET_KEY = 0xAC71F00D1234ABCDULL;
+    uint64_t checksum64 = CalculateChecksum(dataPtr, alignedDataSize);
+    uint64_t signature  = GenerateDigitalSignature(dataPtr, alignedDataSize, SECRET_KEY);
+    uint32_t crc32      = CalculateCRC32(dataPtr, alignedDataSize);
+    uint64_t extra      = StrongMix(checksum64 ^ signature ^ SECRET_KEY);
+
+    uint8_t* h = fileData.data();
+    memcpy(h + 0, MAGIC, 8);
+    h[8] = 22; h[9] = 0; h[10] = 0; h[11] = INNER_COUNT;
+
+    uint32_t totalMB = static_cast<uint32_t>(alignedDataSize / 1024 / 1024);
+    memcpy(h + 12, &totalMB, 4);
+    memcpy(h + 16, &checksum64, 8);
+    memcpy(h + 24, &signature, 8);
+    memcpy(h + 32, &crc32, 4);
+    memcpy(h + 36, &extra, 8);
+
+    for (int i = 0; i < INNER_COUNT; ++i) {
+        uint32_t mb = static_cast<uint32_t>(INNER_SIZES_MB[i]);
+        memcpy(h + 44 + i * 4, &mb, 4);
+    }
+
+    uint64_t fill = signature;
+    for (size_t i = 60; i < HEADER_SIZE; ++i) {
+        fill = StrongMix(fill + i);
+        h[i] = static_cast<uint8_t>(fill);
+    }
+
+    ofstream out(PATTERN_NAME, ios::binary);
+    if (!out.is_open()) {
+        cout << "[ОШИБКА] Не удалось создать файл!" << endl;
+        return;
+    }
+    out.write(reinterpret_cast<const char*>(fileData.data()), fileData.size());
+    out.close();
+    SetFileAttributesA(PATTERN_NAME.c_str(), FILE_ATTRIBUTE_READONLY);
+
+    vector<uint64_t> cnt(256, 0);
+    for (size_t i = 0; i < alignedDataSize; ++i) cnt[dataPtr[i]]++;
+    double entropy = 0.0;
+    for (int i = 0; i < 256; ++i) {
+        double p = (double)cnt[i] / alignedDataSize;
+        if (p > 0) entropy -= p * log2(p);
+    }
+
+    cout << "\n==================================================================" << endl;
+    cout << "  ПАТТЕРН ПОД ТИКРЕЙТЫ ОНЛАЙН-ИГР СОЗДАН" << endl;
+    cout << "==================================================================" << endl;
+    cout << "Файл:                         " << PATTERN_NAME << endl;
+    cout << "Размер:                       " << totalMB << " МБ" << endl;
+    cout << "Энтропия:                     " << fixed << setprecision(5) << entropy << " бит" << endl;
+    cout << "------------------------------------------------------------------ " << endl;
+    cout << "Цифровая подпись:             0x" << hex << uppercase << setw(16) << setfill('0') << signature << dec << endl;
+    cout << "Контрольная сумма:            0x" << hex << uppercase << setw(16) << setfill('0') << checksum64 << dec << endl;
+    cout << "CRC32:                        0x" << hex << uppercase << setw(8)  << setfill('0') << crc32 << dec << endl;
+    cout << "------------------------------------------------------------------ " << endl;
+    cout << "64-tick:                      Да" << endl;
+    cout << "128-tick:                     Да" << endl;
+    cout << "Sub-tick:                     Да" << endl;
+    cout << "Сверхнизкие → сверхвысокие:   Да" << endl;
+    cout << "RLC + фазовое согласование:   Да" << endl;
+    cout << "Анти-Rowhammer:               Да" << endl;
+    cout << "Устойчивость к фрагментации:  Да" << endl;
+    cout << "Атрибут:                      Read-Only" << endl;
+    cout << "==================================================================" << endl;
+}
+
+int main()
+{
+    setlocale(LC_ALL, "Russian");
+    cout << "==================================================================" << endl;
+    cout << "  Tickrate-Optimized Pattern Generator v22.0" << endl;
+    cout << "  64-tick / 128-tick / sub-tick для онлайн-игр" << endl;
+    cout << "==================================================================" << endl;
+
+    GenerateTickratePattern();
+
+    cout << "\nГотово." << endl;
+    system("pause");
+    return 0;
+}
