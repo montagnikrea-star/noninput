@@ -3,84 +3,66 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Adaptive Chameleon Pattern — Auto Run</title>
+  <title>Pattern from CPU Jitter</title>
   <style>
     :root {
-      --bg: #0f1115;
-      --card: #171a21;
-      --text: #e8eaed;
-      --muted: #9aa0a6;
-      --accent: #7aa2ff;
-      --ok: #3dd68c;
-      --warn: #f5a524;
+      --bg:#0f1115; --card:#171a21; --text:#e8eaed; --muted:#9aa0a6;
+      --accent:#7aa2ff; --ok:#3dd68c; --warn:#f5a524;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Inter, system-ui, -apple-system, sans-serif;
-      background: radial-gradient(1200px 600px at 20% -10%, #1a2240 0%, var(--bg) 50%);
-      color: var(--text);
-      min-height: 100vh;
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:Inter,system-ui,sans-serif; color:var(--text);
+      background:radial-gradient(1200px 600px at 20% -10%, #1a2240 0%, var(--bg) 55%);
+      min-height:100vh;
     }
-    .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 60px; }
-    h1 { font-size: 1.55rem; margin: 0 0 8px; }
-    .sub { color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
-    .card {
-      background: var(--card);
-      border: 1px solid #2a2f3a;
-      border-radius: 14px;
-      padding: 16px 18px;
-      margin-bottom: 14px;
+    .wrap{max-width:920px;margin:0 auto;padding:28px 18px 50px}
+    h1{font-size:1.45rem;margin:0 0 8px}
+    .sub{color:var(--muted);line-height:1.5;margin-bottom:18px}
+    .card{
+      background:var(--card);border:1px solid #2a2f3a;border-radius:14px;
+      padding:14px 16px;margin-bottom:12px
     }
-    .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-    button {
-      appearance: none; border: 0; border-radius: 10px;
-      padding: 10px 14px; background: var(--accent); color: #0b1020;
-      font-weight: 600; cursor: pointer;
+    .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+    button{
+      border:0;border-radius:10px;padding:10px 14px;background:var(--accent);
+      color:#0b1020;font-weight:600;cursor:pointer
     }
-    button.secondary { background: #2a3142; color: var(--text); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .log {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12px; white-space: pre-wrap; background: #0c0e13;
-      border-radius: 10px; padding: 12px; min-height: 150px;
-      color: #c9d1d9; border: 1px solid #242a36;
+    button.secondary{background:#2a3142;color:var(--text)}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .grid{
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+      gap:8px;margin-top:8px
     }
-    .ok { color: var(--ok); }
-    .warn { color: var(--warn); }
-    .muted { color: var(--muted); }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 10px; margin-top: 10px;
+    .stat{
+      background:#12151c;border:1px solid #242a36;border-radius:10px;padding:8px 10px
     }
-    .stat {
-      background: #12151c; border-radius: 10px; padding: 10px 12px;
-      border: 1px solid #242a36;
+    .stat b{display:block;margin-top:3px;font-size:1.02rem}
+    .log{
+      font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;
+      white-space:pre-wrap;background:#0c0e13;border:1px solid #242a36;
+      border-radius:10px;padding:10px;min-height:150px;color:#c9d1d9
     }
-    .stat b { display: block; font-size: 1.05rem; margin-top: 4px; }
-    label { font-size: 13px; color: var(--muted); }
-    input[type="range"] { width: 100%; margin-top: 6px; }
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .muted{color:var(--muted)}
+    label{font-size:13px;color:var(--muted)}
+    input[type=range]{width:100%;margin-top:6px}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Adaptive Chameleon Pattern</h1>
+    <h1>Паттерн на основе джиттера CPU</h1>
     <div class="sub">
-      Паттерн генерируется сразу в браузере и автоматически запускается:
-      в память вкладки (RAM), с периодическим обращением (CPU touch)
-      и с попыткой загрузки в GPU/VRAM через WebGPU.
-      Скачивание файла — только опционально.
+      1) Измеряется дрожание системного таймера/процессора<br/>
+      2) По результатам строится профиль джиттера<br/>
+      3) Паттерн генерируется с учётом этого профиля и сразу запускается в RAM + CPU touch + GPU (если доступен)
     </div>
 
     <div class="card">
       <label>Размер паттерна (МБ)</label>
-      <input id="sizeMb" type="range" min="1" max="24" value="6" />
-      <div class="muted" id="sizeLabel">6 МБ</div>
-
+      <input id="sizeMb" type="range" min="1" max="16" value="4" />
+      <div class="muted" id="sizeLabel">4 МБ</div>
       <div class="row">
-        <button id="btnStart">Сгенерировать и запустить</button>
-        <button id="btnDownload" class="secondary" disabled>Скачать .bin (опция)</button>
+        <button id="btnRun">Измерить джиттер и запустить паттерн</button>
+        <button id="btnDownload" class="secondary" disabled>Скачать .bin</button>
         <button id="btnStop" class="secondary" disabled>Остановить</button>
       </div>
     </div>
@@ -88,107 +70,171 @@
     <div class="card">
       <div class="grid">
         <div class="stat">Статус<b id="stStatus">ожидание</b></div>
+        <div class="stat">Mean Δt<b id="stMean">—</b></div>
+        <div class="stat">Jitter σ<b id="stStd">—</b></div>
+        <div class="stat">Max jitter<b id="stMax">—</b></div>
         <div class="stat">RAM<b id="stRam">нет</b></div>
-        <div class="stat">CPU touch<b id="stCpu">нет</b></div>
-        <div class="stat">GPU/VRAM<b id="stGpu">нет</b></div>
+        <div class="stat">GPU<b id="stGpu">нет</b></div>
       </div>
     </div>
 
     <div class="card">
-      <div class="muted" style="margin-bottom:8px">Лог</div>
+      <div class="muted" style="margin-bottom:6px">Лог</div>
       <div class="log" id="log"></div>
-    </div>
-
-    <div class="card muted">
-      <b>Важно</b><br/>
-      Браузер не даёт полного доступа к CPU-кэшам и ядру.  
-      «Запуск в процессор» здесь = данные в RAM процесса + регулярный touch.  
-      «Запуск в GPU» = WebGPU buffer в видеопамяти (если WebGPU доступен).  
-      Всё работает, пока открыта эта вкладка.
     </div>
   </div>
 
 <script>
 (() => {
-  const $ = (id) => document.getElementById(id);
+  const $ = id => document.getElementById(id);
   const logEl = $('log');
-  const sizeMb = $('sizeMb');
-  const sizeLabel = $('sizeLabel');
+  let pattern = null, keepTimer = null, gpuBuffer = null, gpuDevice = null;
+  let jitterProfile = null;
 
-  let pattern = null;
-  let keepTimer = null;
-  let gpuDevice = null;
-  let gpuBuffer = null;
-
-  function log(msg, cls = '') {
-    const line = document.createElement('div');
-    if (cls) line.className = cls;
-    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    logEl.appendChild(line);
+  const log = (m, c='') => {
+    const d = document.createElement('div');
+    if (c) d.className = c;
+    d.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
+    logEl.appendChild(d);
     logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  $('sizeMb').oninput = () => $('sizeLabel').textContent = $('sizeMb').value + ' МБ';
+
+  // ========== 1. ИЗМЕРЕНИЕ ДЖИТТЕРА ==========
+  async function measureJitter(samples = 2500) {
+    // Прогрев
+    let t = performance.now();
+    for (let i = 0; i < 2000; i++) t = performance.now();
+
+    const deltas = new Float64Array(samples);
+    let prev = performance.now();
+
+    // Плотная выборка timestamps
+    for (let i = 0; i < samples; i++) {
+      // небольшая работа, чтобы не было полностью пустого цикла
+      let x = i;
+      x = Math.imul(x ^ (x << 13), 0x5bd1e995);
+      x ^= x >>> 15;
+
+      const now = performance.now();
+      deltas[i] = now - prev;
+      prev = now;
+
+      // периодически отдаём управление, чтобы страница не зависла
+      if ((i & 255) === 0) await new Promise(r => setTimeout(r, 0));
+    }
+
+    // Статистика
+    let sum = 0, sum2 = 0, min = Infinity, max = -Infinity;
+    for (let i = 0; i < samples; i++) {
+      const d = deltas[i];
+      sum += d; sum2 += d * d;
+      if (d < min) min = d;
+      if (d > max) max = d;
+    }
+    const mean = sum / samples;
+    const variance = Math.max(0, sum2 / samples - mean * mean);
+    const std = Math.sqrt(variance);
+
+    // Простая гистограмма для профиля
+    const bins = 24;
+    const hist = new Array(bins).fill(0);
+    const span = Math.max(1e-9, max - min);
+    for (let i = 0; i < samples; i++) {
+      let b = Math.floor(((deltas[i] - min) / span) * bins);
+      if (b >= bins) b = bins - 1;
+      if (b < 0) b = 0;
+      hist[b]++;
+    }
+    const histNorm = hist.map(v => v / samples);
+
+    return {
+      mean, std, min, max,
+      p95: percentile(deltas, 0.95),
+      histNorm,
+      // коэффициенты для генератора
+      seed: hashStats(mean, std, max),
+      chaos: Math.min(1.5, 0.35 + std * 8),      // чем больше σ, тем больше "хаоса"
+      damp: Math.max(0.2, 1.0 - Math.min(1, std * 5)), // сильнее джиттер → сильнее демпфирование
+      attractPenalty: Math.min(1, std * 6)             // сильнее штраф за притяжение
+    };
   }
 
-  const setStatus = (t) => $('stStatus').textContent = t;
-  const setRam = (t) => $('stRam').textContent = t;
-  const setCpu = (t) => $('stCpu').textContent = t;
-  const setGpu = (t) => $('stGpu').textContent = t;
+  function percentile(arr, p) {
+    const a = Array.from(arr).sort((x,y)=>x-y);
+    const idx = Math.min(a.length-1, Math.floor(p * (a.length-1)));
+    return a[idx];
+  }
 
-  sizeMb.addEventListener('input', () => {
-    sizeLabel.textContent = sizeMb.value + ' МБ';
-  });
-
-  function mix32(x) {
-    x = (x + 0x9E3779B9) >>> 0;
-    x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
-    x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
+  function hashStats(mean, std, max) {
+    let x = Math.floor(mean * 1e6) ^ Math.floor(std * 1e7) ^ Math.floor(max * 1e5);
+    x = Math.imul(x ^ (x >>> 16), 0x7feb352d);
+    x = Math.imul(x ^ (x >>> 15), 0x846ca68b);
     return (x ^ (x >>> 16)) >>> 0;
   }
 
-  // Генератор паттерна (браузерная версия идей anti-shunt / wide spectrum / tick)
-  function generatePattern(bytes) {
+  // ========== 2. ГЕНЕРАЦИЯ ПАТТЕРНА ОТ ПРОФИЛЯ ДЖИТТЕРА ==========
+  function generateFromJitter(bytes, jp) {
     const out = new Uint8Array(bytes);
     const PHI = 1.618033988749895;
     const PI = Math.PI;
-    let s1 = 0xDEADBEEF >>> 0;
-    let s2 = 0x12345679 >>> 0;
+
+    let s1 = (0xDEADBEEF ^ jp.seed) >>> 0;
+    let s2 = (0x12345679 ^ (jp.seed * 0x9E37)) >>> 0;
     let prev = 0;
 
+    const mix = (x) => {
+      x = (x + 0x9E3779B9) >>> 0;
+      x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
+      x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
+      return (x ^ (x >>> 16)) >>> 0;
+    };
+
+    // частотные множители слегка сдвигаем профилем джиттера
+    const baseFreq = [0.03, 0.09, 0.28, 0.8, 2.0, 5.2, 12.0, 21.0];
+    const freq = baseFreq.map((f, i) => f * (1 + (jp.histNorm[i % jp.histNorm.length] - 0.04) * jp.chaos));
+
     for (let i = 0; i < bytes; i++) {
-      s1 = mix32(s1 + i);
-      s2 = mix32(s2 + Math.imul(i, 0x9E3779B9));
+      s1 = mix(s1 + i);
+      s2 = mix(s2 + Math.imul(i, 0x9E3779B9));
 
       const theta = (2 * PI * PHI * i) / 256;
 
-      const low  = Math.sin(theta * 0.05);
-      const mid  = Math.sin(theta * 1.05);
-      const high = Math.sin(theta * 6.8);
-      const uhf  = Math.sin(theta * 17.5);
+      let waves = 0;
+      for (let k = 0; k < freq.length; k++) {
+        waves += Math.sin(theta * freq[k] + (jp.histNorm[k % jp.histNorm.length] * PI));
+      }
+      waves /= freq.length;
 
+      // tick-like
       const t128 = Math.sin((2 * PI * i) / (256 / 128));
       const t64  = Math.sin((2 * PI * i) / (256 / 64));
       const sub  = Math.sin((2 * PI * i) / ((256 / 128) / 8));
 
-      const local = 0.4 * mid + 0.3 * t128 + 0.3 * low;
+      const local = 0.45 * waves + 0.3 * t128 + 0.25 * t64;
       const coherence = Math.min(1, Math.abs(local - prev));
-      const antiAttract = 1 - coherence;
+      const antiAttract = (1 - coherence) * (0.7 + 0.3 * jp.attractPenalty);
       prev = local;
 
-      const dissipate = 0.5 + 0.5 * Math.sin(theta * 0.37);
-      const antiShunt = 0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25);
+      const dissipate = (0.5 + 0.5 * Math.sin(theta * 0.37)) * jp.damp;
+      const antiShunt = (0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25)) * (0.8 + 0.4 * jp.attractPenalty);
+
+      // модуляция силой джиттера
+      const jitterMod = Math.sin(theta * (0.2 + jp.std * 3) + jp.mean * 10);
 
       let raw =
-        0.10 * low +
-        0.11 * mid +
-        0.09 * high +
-        0.08 * uhf +
-        0.09 * t128 +
+        0.16 * waves +
+        0.08 * t128 +
         0.06 * t64 +
-        0.06 * sub +
+        0.05 * sub +
         0.13 * dissipate +
-        0.12 * antiShunt +
-        0.09 * antiAttract +
-        0.04 * ((s1 & 255) / 255) +
-        0.03 * ((s2 & 255) / 255);
+        0.13 * antiShunt +
+        0.11 * antiAttract +
+        0.08 * jitterMod +
+        0.05 * ((s1 & 255) / 255) +
+        0.04 * ((s2 & 255) / 255) +
+        0.03 * jp.chaos * Math.sin(theta * 9.1);
 
       let val = Math.floor(((raw + 1) * 127.5) % 256);
       if (val < 0) val += 256;
@@ -203,118 +249,98 @@
       if (!pattern) return;
       let acc = 0;
       const step = Math.max(1, (pattern.length / 2048) | 0);
-      for (let i = 0; i < pattern.length; i += step) {
-        acc = (acc + pattern[i]) & 255;
-      }
-      // touch начала/середины/конца
-      acc ^= pattern[0];
-      acc ^= pattern[pattern.length >> 1];
-      acc ^= pattern[pattern.length - 1];
+      for (let i = 0; i < pattern.length; i += step) acc = (acc + pattern[i]) & 255;
+      acc ^= pattern[0] ^ pattern[pattern.length >> 1] ^ pattern[pattern.length - 1];
       if (acc === 999) console.log(acc);
     }, 500);
-    setCpu('активен');
   }
 
-  async function uploadToGpu(data) {
+  async function uploadGpu(data) {
     if (!('gpu' in navigator)) {
-      setGpu('WebGPU нет');
-      log('WebGPU не поддерживается — GPU/VRAM пропущен', 'warn');
-      return false;
+      $('stGpu').textContent = 'нет WebGPU';
+      log('WebGPU недоступен, GPU пропущен', 'warn');
+      return;
     }
     try {
       const adapter = await navigator.gpu.requestAdapter();
-      if (!adapter) throw new Error('adapter not found');
+      if (!adapter) throw new Error('no adapter');
       gpuDevice = await adapter.requestDevice();
-
-      // Для стабильности ограничим GPU-копию
-      const maxGpu = Math.min(data.length, 16 * 1024 * 1024);
+      const maxGpu = Math.min(data.length, 12 * 1024 * 1024);
       const slice = data.subarray(0, maxGpu);
-
       gpuBuffer = gpuDevice.createBuffer({
         size: slice.byteLength,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
       });
       gpuDevice.queue.writeBuffer(gpuBuffer, 0, slice);
-
-      setGpu((maxGpu / 1024 / 1024).toFixed(1) + ' МБ');
-      log(`GPU/VRAM: загружено ${(maxGpu / 1024 / 1024).toFixed(1)} МБ`, 'ok');
-      return true;
+      $('stGpu').textContent = (maxGpu/1024/1024).toFixed(1) + ' МБ';
+      log('GPU/VRAM: буфер создан', 'ok');
     } catch (e) {
-      setGpu('ошибка');
-      log('GPU ошибка: ' + e.message, 'warn');
-      return false;
+      $('stGpu').textContent = 'ошибка';
+      log('GPU: ' + e.message, 'warn');
     }
   }
 
-  async function startAll() {
-    const mb = parseInt(sizeMb.value, 10);
+  async function runAll() {
+    const mb = parseInt($('sizeMb').value, 10);
     const bytes = mb * 1024 * 1024;
 
-    $('btnStart').disabled = true;
+    $('btnRun').disabled = true;
     $('btnDownload').disabled = true;
     $('btnStop').disabled = true;
+    $('stStatus').textContent = 'измерение джиттера...';
+    log('Измерение джиттера CPU/таймера...');
 
-    setStatus('генерация...');
-    setRam('нет');
-    setCpu('нет');
-    setGpu('нет');
-    log(`Генерация паттерна ${mb} МБ в браузере...`);
+    const jp = await measureJitter(2500);
+    jitterProfile = jp;
 
+    $('stMean').textContent = jp.mean.toFixed(4) + ' ms';
+    $('stStd').textContent = jp.std.toFixed(4) + ' ms';
+    $('stMax').textContent = jp.max.toFixed(4) + ' ms';
+
+    log(`Jitter: mean=${jp.mean.toFixed(4)} σ=${jp.std.toFixed(4)} max=${jp.max.toFixed(4)}`, 'ok');
+    log(`Профиль: chaos=${jp.chaos.toFixed(3)} damp=${jp.damp.toFixed(3)} penalty=${jp.attractPenalty.toFixed(3)}`);
+
+    $('stStatus').textContent = 'генерация паттерна...';
+    log(`Генерация паттерна ${mb} МБ на основе джиттера...`);
     await new Promise(r => setTimeout(r, 20));
 
     const t0 = performance.now();
-    pattern = generatePattern(bytes);
-    const dt = (performance.now() - t0).toFixed(1);
+    pattern = generateFromJitter(bytes, jp);
+    log(`Паттерн создан за ${(performance.now()-t0).toFixed(1)} мс`, 'ok');
 
-    // 1) сразу в RAM вкладки
-    setRam(mb + ' МБ');
-    log(`RAM: паттерн в памяти вкладки (${dt} мс)`, 'ok');
-
-    // 2) сразу CPU touch
+    // сразу в RAM + CPU touch + GPU
+    $('stRam').textContent = mb + ' МБ';
     startCpuTouch();
-    log('CPU: периодический touch запущен', 'ok');
+    log('RAM + CPU touch запущены', 'ok');
+    await uploadGpu(pattern);
 
-    // 3) сразу попытка GPU/VRAM
-    setStatus('загрузка GPU...');
-    await uploadToGpu(pattern);
-
-    setStatus('запущен');
-    $('btnStart').disabled = false;
+    $('stStatus').textContent = 'запущен';
+    $('btnRun').disabled = false;
     $('btnDownload').disabled = false;
     $('btnStop').disabled = false;
-    log('Паттерн сгенерирован и запущен без скачивания', 'ok');
+    log('Готово: измерение → генерация → запуск', 'ok');
   }
 
   function stopAll() {
-    if (keepTimer) {
-      clearInterval(keepTimer);
-      keepTimer = null;
-    }
-    // GPU buffer освободится при закрытии страницы; явного destroy достаточно
-    if (gpuBuffer) {
-      try { gpuBuffer.destroy(); } catch (_) {}
-      gpuBuffer = null;
-    }
+    if (keepTimer) { clearInterval(keepTimer); keepTimer = null; }
+    if (gpuBuffer) { try { gpuBuffer.destroy(); } catch(_){} gpuBuffer = null; }
     gpuDevice = null;
-    setCpu('нет');
-    setGpu('нет');
-    setStatus(pattern ? 'в RAM' : 'остановлен');
-    log('Удержание CPU/GPU остановлено');
+    $('stStatus').textContent = pattern ? 'в RAM' : 'стоп';
+    $('stGpu').textContent = 'нет';
+    log('Остановлено удержание CPU/GPU');
   }
 
-  $('btnStart').onclick = () => { startAll().catch(e => log(String(e), 'warn')); };
+  $('btnRun').onclick = () => runAll().catch(e => log(String(e), 'warn'));
   $('btnStop').onclick = stopAll;
-
   $('btnDownload').onclick = () => {
     if (!pattern) return;
-    const blob = new Blob([pattern], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
+    const blob = new Blob([pattern], {type:'application/octet-stream'});
     const a = document.createElement('a');
-    a.href = url;
+    a.href = URL.createObjectURL(blob);
     a.download = 'adaptive_chameleon_pattern.bin';
     a.click();
-    URL.revokeObjectURL(url);
-    log('Опциональное скачивание .bin выполнено', 'ok');
+    URL.revokeObjectURL(a.href);
+    log('Скачивание .bin', 'ok');
   };
 })();
 </script>
