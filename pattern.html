@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pattern from CPU Jitter</title>
+  <title>Full Pattern — Jitter → Generate → Run</title>
   <style>
     :root {
       --bg:#0f1115; --card:#171a21; --text:#e8eaed; --muted:#9aa0a6;
-      --accent:#7aa2ff; --ok:#3dd68c; --warn:#f5a524;
+      --accent:#7aa2ff; --ok:#3dd68c; --warn:#f5a524; --bad:#ff6b6b;
     }
     *{box-sizing:border-box}
     body{
@@ -15,9 +15,9 @@
       background:radial-gradient(1200px 600px at 20% -10%, #1a2240 0%, var(--bg) 55%);
       min-height:100vh;
     }
-    .wrap{max-width:920px;margin:0 auto;padding:28px 18px 50px}
+    .wrap{max-width:980px;margin:0 auto;padding:28px 18px 60px}
     h1{font-size:1.45rem;margin:0 0 8px}
-    .sub{color:var(--muted);line-height:1.5;margin-bottom:18px}
+    .sub{color:var(--muted);line-height:1.5;margin-bottom:16px}
     .card{
       background:var(--card);border:1px solid #2a2f3a;border-radius:14px;
       padding:14px 16px;margin-bottom:12px
@@ -40,28 +40,42 @@
     .log{
       font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;
       white-space:pre-wrap;background:#0c0e13;border:1px solid #242a36;
-      border-radius:10px;padding:10px;min-height:150px;color:#c9d1d9
+      border-radius:10px;padding:10px;min-height:170px;color:#c9d1d9
     }
-    .ok{color:var(--ok)} .warn{color:var(--warn)} .muted{color:var(--muted)}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .muted{color:var(--muted)}
     label{font-size:13px;color:var(--muted)}
     input[type=range]{width:100%;margin-top:6px}
+    select{
+      width:100%;margin-top:6px;background:#12151c;color:var(--text);
+      border:1px solid #2a2f3a;border-radius:8px;padding:8px
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Паттерн на основе джиттера CPU</h1>
+    <h1>Full Pattern Runner</h1>
     <div class="sub">
-      1) Измеряется дрожание системного таймера/процессора<br/>
-      2) По результатам строится профиль джиттера<br/>
-      3) Паттерн генерируется с учётом этого профиля и сразу запускается в RAM + CPU touch + GPU (если доступен)
+      Сначала запрашиваются доступные разрешения браузера, затем измеряется джиттер CPU,
+      после этого генерируется полноценный паттерн (без искусственного лимита в коде)
+      и сразу запускается в RAM / CPU touch / GPU.
     </div>
 
     <div class="card">
-      <label>Размер паттерна (МБ)</label>
-      <input id="sizeMb" type="range" min="1" max="16" value="4" />
-      <div class="muted" id="sizeLabel">4 МБ</div>
+      <label>Размер паттерна</label>
+      <select id="sizePreset">
+        <option value="4">4 МБ</option>
+        <option value="8" selected>8 МБ</option>
+        <option value="16">16 МБ</option>
+        <option value="32">32 МБ</option>
+        <option value="64">64 МБ</option>
+        <option value="128">128 МБ</option>
+        <option value="auto">Авто (по оценке памяти)</option>
+      </select>
+      <div class="muted" id="memHint" style="margin-top:8px">Оценка памяти: —</div>
+
       <div class="row">
-        <button id="btnRun">Измерить джиттер и запустить паттерн</button>
+        <button id="btnPerms">Запросить разрешения</button>
+        <button id="btnRun">Измерить джиттер и запустить</button>
         <button id="btnDownload" class="secondary" disabled>Скачать .bin</button>
         <button id="btnStop" class="secondary" disabled>Остановить</button>
       </div>
@@ -70,9 +84,9 @@
     <div class="card">
       <div class="grid">
         <div class="stat">Статус<b id="stStatus">ожидание</b></div>
-        <div class="stat">Mean Δt<b id="stMean">—</b></div>
+        <div class="stat">Persistent<b id="stPersist">нет</b></div>
+        <div class="stat">WakeLock<b id="stWake">нет</b></div>
         <div class="stat">Jitter σ<b id="stStd">—</b></div>
-        <div class="stat">Max jitter<b id="stMax">—</b></div>
         <div class="stat">RAM<b id="stRam">нет</b></div>
         <div class="stat">GPU<b id="stGpu">нет</b></div>
       </div>
@@ -82,13 +96,25 @@
       <div class="muted" style="margin-bottom:6px">Лог</div>
       <div class="log" id="log"></div>
     </div>
+
+    <div class="card muted">
+      Браузер не даёт VirtualLock, доступ к ядру и гарантированное удержание L1/L2/L3.
+      Здесь используется максимум доступного: Persistent Storage, Screen Wake Lock,
+      большой ArrayBuffer в RAM, CPU touch и WebGPU buffer.
+      Очень большие размеры (64–128 МБ) могут привести к тормозам или OOM — это ограничение браузера, не кода.
+    </div>
   </div>
 
 <script>
 (() => {
   const $ = id => document.getElementById(id);
   const logEl = $('log');
-  let pattern = null, keepTimer = null, gpuBuffer = null, gpuDevice = null;
+
+  let pattern = null;
+  let keepTimer = null;
+  let gpuDevice = null;
+  let gpuBuffer = null;
+  let wakeLock = null;
   let jitterProfile = null;
 
   const log = (m, c='') => {
@@ -99,245 +125,300 @@
     logEl.scrollTop = logEl.scrollHeight;
   };
 
-  $('sizeMb').oninput = () => $('sizeLabel').textContent = $('sizeMb').value + ' МБ';
+  // ---- оценка памяти ----
+  function estimateMemory() {
+    const dm = navigator.deviceMemory || null; // GiB, если есть
+    const hint = dm ? `navigator.deviceMemory ≈ ${dm} ГБ` : 'deviceMemory недоступен';
+    $('memHint').textContent = 'Оценка памяти: ' + hint;
+    return dm;
+  }
+  estimateMemory();
 
-  // ========== 1. ИЗМЕРЕНИЕ ДЖИТТЕРА ==========
-  async function measureJitter(samples = 2500) {
-    // Прогрев
+  function chooseAutoSizeMb() {
+    const dm = navigator.deviceMemory;
+    if (!dm) return 16;
+    if (dm >= 16) return 64;
+    if (dm >= 8) return 32;
+    if (dm >= 4) return 16;
+    return 8;
+  }
+
+  // ---- разрешения ----
+  async function requestPermissions() {
+    log('Запрос разрешений браузера...');
+
+    // 1) Persistent storage
+    try {
+      if (navigator.storage && navigator.storage.persist) {
+        const already = await navigator.storage.persisted();
+        if (already) {
+          $('stPersist').textContent = 'да';
+          log('Persistent Storage уже активен', 'ok');
+        } else {
+          const ok = await navigator.storage.persist();
+          $('stPersist').textContent = ok ? 'да' : 'отклонено';
+          log(ok ? 'Persistent Storage разрешён' : 'Persistent Storage не выдан', ok ? 'ok' : 'warn');
+        }
+      } else {
+        $('stPersist').textContent = 'n/a';
+        log('API Persistent Storage недоступен', 'warn');
+      }
+    } catch (e) {
+      $('stPersist').textContent = 'ошибка';
+      log('Persistent: ' + e.message, 'warn');
+    }
+
+    // 2) Screen Wake Lock (чтобы система реже уходила в сон во время работы)
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        $('stWake').textContent = 'да';
+        log('Screen Wake Lock получен', 'ok');
+        wakeLock.addEventListener('release', () => {
+          $('stWake').textContent = 'снят';
+          log('Wake Lock снят', 'warn');
+        });
+      } else {
+        $('stWake').textContent = 'n/a';
+        log('Wake Lock API недоступен', 'warn');
+      }
+    } catch (e) {
+      $('stWake').textContent = 'отклонён';
+      log('Wake Lock: ' + e.message, 'warn');
+    }
+
+    // 3) Notification permission — не обязателен, но иногда помогает «весу» страницы в политике браузера
+    try {
+      if ('Notification' in window && Notification.permission === 'default') {
+        const p = await Notification.requestPermission();
+        log('Notification permission: ' + p);
+      }
+    } catch (_) {}
+
+    log('Запрос разрешений завершён');
+  }
+
+  // ---- измерение джиттера ----
+  async function measureJitter(samples = 3000) {
     let t = performance.now();
-    for (let i = 0; i < 2000; i++) t = performance.now();
+    for (let i = 0; i < 3000; i++) t = performance.now();
 
     const deltas = new Float64Array(samples);
     let prev = performance.now();
-
-    // Плотная выборка timestamps
     for (let i = 0; i < samples; i++) {
-      // небольшая работа, чтобы не было полностью пустого цикла
       let x = i;
       x = Math.imul(x ^ (x << 13), 0x5bd1e995);
       x ^= x >>> 15;
-
       const now = performance.now();
       deltas[i] = now - prev;
       prev = now;
-
-      // периодически отдаём управление, чтобы страница не зависла
       if ((i & 255) === 0) await new Promise(r => setTimeout(r, 0));
     }
 
-    // Статистика
-    let sum = 0, sum2 = 0, min = Infinity, max = -Infinity;
-    for (let i = 0; i < samples; i++) {
-      const d = deltas[i];
-      sum += d; sum2 += d * d;
-      if (d < min) min = d;
-      if (d > max) max = d;
+    let sum=0, sum2=0, min=Infinity, max=-Infinity;
+    for (let i=0;i<samples;i++){
+      const d=deltas[i]; sum+=d; sum2+=d*d;
+      if(d<min)min=d; if(d>max)max=d;
     }
-    const mean = sum / samples;
-    const variance = Math.max(0, sum2 / samples - mean * mean);
-    const std = Math.sqrt(variance);
+    const mean = sum/samples;
+    const std = Math.sqrt(Math.max(0, sum2/samples - mean*mean));
 
-    // Простая гистограмма для профиля
-    const bins = 24;
-    const hist = new Array(bins).fill(0);
-    const span = Math.max(1e-9, max - min);
-    for (let i = 0; i < samples; i++) {
-      let b = Math.floor(((deltas[i] - min) / span) * bins);
-      if (b >= bins) b = bins - 1;
-      if (b < 0) b = 0;
-      hist[b]++;
+    const bins=32, hist=new Array(bins).fill(0);
+    const span=Math.max(1e-9, max-min);
+    for(let i=0;i<samples;i++){
+      let b=Math.floor(((deltas[i]-min)/span)*bins);
+      if(b>=bins)b=bins-1; if(b<0)b=0; hist[b]++;
     }
-    const histNorm = hist.map(v => v / samples);
+    const histNorm=hist.map(v=>v/samples);
+
+    let seed = Math.floor(mean*1e6) ^ Math.floor(std*1e7) ^ Math.floor(max*1e5);
+    seed = Math.imul(seed ^ (seed>>>16), 0x7feb352d);
+    seed = Math.imul(seed ^ (seed>>>15), 0x846ca68b);
+    seed = (seed ^ (seed>>>16)) >>> 0;
 
     return {
-      mean, std, min, max,
-      p95: percentile(deltas, 0.95),
-      histNorm,
-      // коэффициенты для генератора
-      seed: hashStats(mean, std, max),
-      chaos: Math.min(1.5, 0.35 + std * 8),      // чем больше σ, тем больше "хаоса"
-      damp: Math.max(0.2, 1.0 - Math.min(1, std * 5)), // сильнее джиттер → сильнее демпфирование
-      attractPenalty: Math.min(1, std * 6)             // сильнее штраф за притяжение
+      mean, std, min, max, histNorm, seed,
+      chaos: Math.min(1.6, 0.35 + std*8),
+      damp: Math.max(0.2, 1.0 - Math.min(1, std*5)),
+      attractPenalty: Math.min(1, std*6)
     };
   }
 
-  function percentile(arr, p) {
-    const a = Array.from(arr).sort((x,y)=>x-y);
-    const idx = Math.min(a.length-1, Math.floor(p * (a.length-1)));
-    return a[idx];
-  }
-
-  function hashStats(mean, std, max) {
-    let x = Math.floor(mean * 1e6) ^ Math.floor(std * 1e7) ^ Math.floor(max * 1e5);
-    x = Math.imul(x ^ (x >>> 16), 0x7feb352d);
-    x = Math.imul(x ^ (x >>> 15), 0x846ca68b);
-    return (x ^ (x >>> 16)) >>> 0;
-  }
-
-  // ========== 2. ГЕНЕРАЦИЯ ПАТТЕРНА ОТ ПРОФИЛЯ ДЖИТТЕРА ==========
+  // ---- генерация ----
   function generateFromJitter(bytes, jp) {
     const out = new Uint8Array(bytes);
-    const PHI = 1.618033988749895;
-    const PI = Math.PI;
+    const PHI=1.618033988749895, PI=Math.PI;
+    let s1=(0xDEADBEEF ^ jp.seed)>>>0;
+    let s2=(0x12345679 ^ (jp.seed*0x9E37))>>>0;
+    let prev=0;
 
-    let s1 = (0xDEADBEEF ^ jp.seed) >>> 0;
-    let s2 = (0x12345679 ^ (jp.seed * 0x9E37)) >>> 0;
-    let prev = 0;
-
-    const mix = (x) => {
-      x = (x + 0x9E3779B9) >>> 0;
-      x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
-      x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
-      return (x ^ (x >>> 16)) >>> 0;
+    const mix = x => {
+      x=(x+0x9E3779B9)>>>0;
+      x=Math.imul(x^(x>>>16),0x85EBCA6B)>>>0;
+      x=Math.imul(x^(x>>>13),0xC2B2AE35)>>>0;
+      return (x^(x>>>16))>>>0;
     };
 
-    // частотные множители слегка сдвигаем профилем джиттера
-    const baseFreq = [0.03, 0.09, 0.28, 0.8, 2.0, 5.2, 12.0, 21.0];
-    const freq = baseFreq.map((f, i) => f * (1 + (jp.histNorm[i % jp.histNorm.length] - 0.04) * jp.chaos));
+    const base=[0.025,0.07,0.18,0.45,1.0,2.6,6.5,14.0,22.0];
+    const freq=base.map((f,i)=>f*(1+(jp.histNorm[i%jp.histNorm.length]-1/base.length)*jp.chaos));
 
-    for (let i = 0; i < bytes; i++) {
-      s1 = mix(s1 + i);
-      s2 = mix(s2 + Math.imul(i, 0x9E3779B9));
+    for (let i=0;i<bytes;i++){
+      s1=mix(s1+i);
+      s2=mix(s2+Math.imul(i,0x9E3779B9));
+      const theta=(2*PI*PHI*i)/256;
 
-      const theta = (2 * PI * PHI * i) / 256;
+      let waves=0;
+      for(let k=0;k<freq.length;k++) waves += Math.sin(theta*freq[k] + jp.histNorm[k%jp.histNorm.length]*PI);
+      waves/=freq.length;
 
-      let waves = 0;
-      for (let k = 0; k < freq.length; k++) {
-        waves += Math.sin(theta * freq[k] + (jp.histNorm[k % jp.histNorm.length] * PI));
-      }
-      waves /= freq.length;
+      const t128=Math.sin((2*PI*i)/(256/128));
+      const t64 =Math.sin((2*PI*i)/(256/64));
+      const sub =Math.sin((2*PI*i)/((256/128)/8));
 
-      // tick-like
-      const t128 = Math.sin((2 * PI * i) / (256 / 128));
-      const t64  = Math.sin((2 * PI * i) / (256 / 64));
-      const sub  = Math.sin((2 * PI * i) / ((256 / 128) / 8));
+      const local=0.45*waves+0.3*t128+0.25*t64;
+      const coherence=Math.min(1, Math.abs(local-prev));
+      const antiAttract=(1-coherence)*(0.7+0.3*jp.attractPenalty);
+      prev=local;
 
-      const local = 0.45 * waves + 0.3 * t128 + 0.25 * t64;
-      const coherence = Math.min(1, Math.abs(local - prev));
-      const antiAttract = (1 - coherence) * (0.7 + 0.3 * jp.attractPenalty);
-      prev = local;
-
-      const dissipate = (0.5 + 0.5 * Math.sin(theta * 0.37)) * jp.damp;
-      const antiShunt = (0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25)) * (0.8 + 0.4 * jp.attractPenalty);
-
-      // модуляция силой джиттера
-      const jitterMod = Math.sin(theta * (0.2 + jp.std * 3) + jp.mean * 10);
+      const dissipate=(0.5+0.5*Math.sin(theta*0.37))*jp.damp;
+      const antiShunt=(0.5+0.5*Math.sin(theta*0.19+PI*0.25))*(0.85+0.4*jp.attractPenalty);
+      const jitterMod=Math.sin(theta*(0.2+jp.std*3)+jp.mean*10);
 
       let raw =
-        0.16 * waves +
-        0.08 * t128 +
-        0.06 * t64 +
-        0.05 * sub +
-        0.13 * dissipate +
-        0.13 * antiShunt +
-        0.11 * antiAttract +
-        0.08 * jitterMod +
-        0.05 * ((s1 & 255) / 255) +
-        0.04 * ((s2 & 255) / 255) +
-        0.03 * jp.chaos * Math.sin(theta * 9.1);
+        0.15*waves + 0.07*t128 + 0.05*t64 + 0.05*sub +
+        0.13*dissipate + 0.13*antiShunt + 0.11*antiAttract +
+        0.08*jitterMod + 0.05*((s1&255)/255) + 0.04*((s2&255)/255) +
+        0.03*jp.chaos*Math.sin(theta*9.1);
 
-      let val = Math.floor(((raw + 1) * 127.5) % 256);
-      if (val < 0) val += 256;
-      out[i] = val & 255;
+      let val=Math.floor(((raw+1)*127.5)%256);
+      if(val<0) val+=256;
+      out[i]=val&255;
+
+      if ((i & 0xFFFFF) === 0 && i>0) {
+        // редкий yield для UI на огромных размерах — через Atomics не нужно
+      }
     }
     return out;
   }
 
-  function startCpuTouch() {
-    if (keepTimer) clearInterval(keepTimer);
-    keepTimer = setInterval(() => {
-      if (!pattern) return;
-      let acc = 0;
-      const step = Math.max(1, (pattern.length / 2048) | 0);
-      for (let i = 0; i < pattern.length; i += step) acc = (acc + pattern[i]) & 255;
-      acc ^= pattern[0] ^ pattern[pattern.length >> 1] ^ pattern[pattern.length - 1];
-      if (acc === 999) console.log(acc);
-    }, 500);
+  function startCpuTouch(){
+    if(keepTimer) clearInterval(keepTimer);
+    keepTimer=setInterval(()=>{
+      if(!pattern) return;
+      let acc=0;
+      const step=Math.max(1,(pattern.length/4096)|0);
+      for(let i=0;i<pattern.length;i+=step) acc=(acc+pattern[i])&255;
+      acc^=pattern[0]^pattern[pattern.length>>1]^pattern[pattern.length-1];
+      if(acc===999) console.log(acc);
+    },400);
   }
 
-  async function uploadGpu(data) {
-    if (!('gpu' in navigator)) {
-      $('stGpu').textContent = 'нет WebGPU';
-      log('WebGPU недоступен, GPU пропущен', 'warn');
+  async function uploadGpu(data){
+    if(!('gpu' in navigator)){
+      $('stGpu').textContent='нет WebGPU';
+      log('WebGPU недоступен', 'warn');
       return;
     }
-    try {
-      const adapter = await navigator.gpu.requestAdapter();
-      if (!adapter) throw new Error('no adapter');
-      gpuDevice = await adapter.requestDevice();
-      const maxGpu = Math.min(data.length, 12 * 1024 * 1024);
-      const slice = data.subarray(0, maxGpu);
-      gpuBuffer = gpuDevice.createBuffer({
-        size: slice.byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-      });
-      gpuDevice.queue.writeBuffer(gpuBuffer, 0, slice);
-      $('stGpu').textContent = (maxGpu/1024/1024).toFixed(1) + ' МБ';
-      log('GPU/VRAM: буфер создан', 'ok');
-    } catch (e) {
-      $('stGpu').textContent = 'ошибка';
-      log('GPU: ' + e.message, 'warn');
+    try{
+      const adapter=await navigator.gpu.requestAdapter();
+      if(!adapter) throw new Error('no adapter');
+      gpuDevice=await adapter.requestDevice();
+
+      // Без искусственного «маленького» лимита: грузим сколько получится
+      // (браузер/драйвер сам может ограничить)
+      let size=data.byteLength;
+      // практический потолок одной записи — пробуем целиком, при ошибке режем
+      try {
+        gpuBuffer=gpuDevice.createBuffer({
+          size,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+        });
+        gpuDevice.queue.writeBuffer(gpuBuffer,0,data);
+      } catch (e1) {
+        size = Math.min(size, 64*1024*1024);
+        const slice=data.subarray(0,size);
+        gpuBuffer=gpuDevice.createBuffer({
+          size: slice.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+        });
+        gpuDevice.queue.writeBuffer(gpuBuffer,0,slice);
+        log('GPU: полный размер не принят, загружено '+ (size/1024/1024).toFixed(1)+' МБ', 'warn');
+      }
+      $('stGpu').textContent=(size/1024/1024).toFixed(1)+' МБ';
+      log('GPU/VRAM buffer готов', 'ok');
+    }catch(e){
+      $('stGpu').textContent='ошибка';
+      log('GPU: '+e.message, 'warn');
     }
   }
 
-  async function runAll() {
-    const mb = parseInt($('sizeMb').value, 10);
+  async function runAll(){
+    let mb = $('sizePreset').value;
+    if (mb === 'auto') mb = chooseAutoSizeMb();
+    else mb = parseInt(mb,10);
+
     const bytes = mb * 1024 * 1024;
 
-    $('btnRun').disabled = true;
-    $('btnDownload').disabled = true;
-    $('btnStop').disabled = true;
-    $('stStatus').textContent = 'измерение джиттера...';
-    log('Измерение джиттера CPU/таймера...');
+    $('btnRun').disabled=true;
+    $('btnDownload').disabled=true;
+    $('btnStop').disabled=true;
+    $('stStatus').textContent='разрешения...';
 
-    const jp = await measureJitter(2500);
+    await requestPermissions();
+
+    $('stStatus').textContent='джитер...';
+    log('Измерение джиттера CPU...');
+    const jp = await measureJitter(3000);
     jitterProfile = jp;
+    $('stStd').textContent = jp.std.toFixed(4)+' ms';
+    log(`σ=${jp.std.toFixed(4)} mean=${jp.mean.toFixed(4)} max=${jp.max.toFixed(4)}`, 'ok');
 
-    $('stMean').textContent = jp.mean.toFixed(4) + ' ms';
-    $('stStd').textContent = jp.std.toFixed(4) + ' ms';
-    $('stMax').textContent = jp.max.toFixed(4) + ' ms';
+    $('stStatus').textContent='генерация '+mb+' МБ...';
+    log('Генерация паттерна '+mb+' МБ (без искусственного лимита в логике)...');
+    await new Promise(r=>setTimeout(r,30));
 
-    log(`Jitter: mean=${jp.mean.toFixed(4)} σ=${jp.std.toFixed(4)} max=${jp.max.toFixed(4)}`, 'ok');
-    log(`Профиль: chaos=${jp.chaos.toFixed(3)} damp=${jp.damp.toFixed(3)} penalty=${jp.attractPenalty.toFixed(3)}`);
+    let t0=performance.now();
+    try {
+      pattern = generateFromJitter(bytes, jp);
+    } catch (e) {
+      log('Не хватило памяти на '+mb+' МБ: '+e.message, 'bad');
+      $('stStatus').textContent='OOM';
+      $('btnRun').disabled=false;
+      return;
+    }
+    log('Паттерн готов за '+(performance.now()-t0).toFixed(0)+' мс', 'ok');
 
-    $('stStatus').textContent = 'генерация паттерна...';
-    log(`Генерация паттерна ${mb} МБ на основе джиттера...`);
-    await new Promise(r => setTimeout(r, 20));
-
-    const t0 = performance.now();
-    pattern = generateFromJitter(bytes, jp);
-    log(`Паттерн создан за ${(performance.now()-t0).toFixed(1)} мс`, 'ok');
-
-    // сразу в RAM + CPU touch + GPU
-    $('stRam').textContent = mb + ' МБ';
+    $('stRam').textContent=mb+' МБ';
     startCpuTouch();
-    log('RAM + CPU touch запущены', 'ok');
+    log('RAM + CPU touch активны', 'ok');
     await uploadGpu(pattern);
 
-    $('stStatus').textContent = 'запущен';
-    $('btnRun').disabled = false;
-    $('btnDownload').disabled = false;
-    $('btnStop').disabled = false;
-    log('Готово: измерение → генерация → запуск', 'ok');
+    $('stStatus').textContent='запущен';
+    $('btnRun').disabled=false;
+    $('btnDownload').disabled=false;
+    $('btnStop').disabled=false;
+    log('Полный цикл завершён', 'ok');
   }
 
-  function stopAll() {
-    if (keepTimer) { clearInterval(keepTimer); keepTimer = null; }
-    if (gpuBuffer) { try { gpuBuffer.destroy(); } catch(_){} gpuBuffer = null; }
-    gpuDevice = null;
-    $('stStatus').textContent = pattern ? 'в RAM' : 'стоп';
-    $('stGpu').textContent = 'нет';
-    log('Остановлено удержание CPU/GPU');
+  function stopAll(){
+    if(keepTimer){clearInterval(keepTimer);keepTimer=null}
+    if(gpuBuffer){try{gpuBuffer.destroy()}catch(_){} gpuBuffer=null}
+    gpuDevice=null;
+    if(wakeLock){try{wakeLock.release()}catch(_){} wakeLock=null; $('stWake').textContent='снят'}
+    $('stGpu').textContent='нет';
+    $('stStatus').textContent=pattern?'в RAM':'стоп';
+    log('Остановлено');
   }
 
-  $('btnRun').onclick = () => runAll().catch(e => log(String(e), 'warn'));
+  $('btnPerms').onclick = () => requestPermissions();
+  $('btnRun').onclick = () => runAll().catch(e=>log(String(e),'bad'));
   $('btnStop').onclick = stopAll;
   $('btnDownload').onclick = () => {
-    if (!pattern) return;
-    const blob = new Blob([pattern], {type:'application/octet-stream'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'adaptive_chameleon_pattern.bin';
+    if(!pattern) return;
+    const blob=new Blob([pattern],{type:'application/octet-stream'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='adaptive_chameleon_pattern.bin';
     a.click();
     URL.revokeObjectURL(a.href);
     log('Скачивание .bin', 'ok');
