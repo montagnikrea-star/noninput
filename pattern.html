@@ -3,99 +3,113 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dynamic Pattern → Min Jitter → Download</title>
+  <title>AI Pattern Tuner + Live View</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
-      --bg:#0f1115; --card:#171a21; --text:#e8eaed; --muted:#9aa0a6;
+      --bg:#0b0d12; --card:#141821; --text:#e8eaed; --muted:#9aa0a6;
       --accent:#7aa2ff; --ok:#3dd68c; --warn:#f5a524; --bad:#ff6b6b;
     }
     *{box-sizing:border-box}
     body{
       margin:0; font-family:Inter,system-ui,sans-serif; color:var(--text);
-      background:radial-gradient(1100px 500px at 15% -10%, #1a2240 0%, var(--bg) 55%);
+      background:radial-gradient(1000px 500px at 20% -10%, #182038 0%, var(--bg) 50%);
       min-height:100vh;
     }
-    .wrap{max-width:900px;margin:0 auto;padding:24px 16px 50px}
-    h1{font-size:1.3rem;margin:0 0 8px}
-    .sub{color:var(--muted);line-height:1.5;margin-bottom:14px;font-size:14px}
+    .wrap{max-width:980px;margin:0 auto;padding:20px 14px 40px}
+    h1{font-size:1.25rem;margin:0 0 6px}
+    .sub{color:var(--muted);font-size:13px;line-height:1.45;margin-bottom:12px}
     .card{
-      background:var(--card);border:1px solid #2a2f3a;border-radius:14px;
-      padding:14px 16px;margin-bottom:12px
+      background:var(--card);border:1px solid #262c3a;border-radius:14px;
+      padding:12px 14px;margin-bottom:12px
     }
-    .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+    .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
     button{
-      border:0;border-radius:10px;padding:10px 14px;background:var(--accent);
+      border:0;border-radius:10px;padding:10px 12px;background:var(--accent);
       color:#0b1020;font-weight:600;cursor:pointer
     }
     button.secondary{background:#2a3142;color:var(--text)}
-    button:disabled{opacity:.5;cursor:not-allowed}
+    button:disabled{opacity:.45;cursor:not-allowed}
     .grid{
-      display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
       gap:8px;margin-top:8px
     }
     .stat{
-      background:#12151c;border:1px solid #242a36;border-radius:10px;padding:8px 10px
+      background:#0f131b;border:1px solid #242a36;border-radius:10px;padding:8px 10px
     }
-    .stat b{display:block;margin-top:3px;font-size:.95rem}
-    .log{
-      font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;
-      white-space:pre-wrap;background:#0c0e13;border:1px solid #242a36;
-      border-radius:10px;padding:10px;min-height:160px;color:#c9d1d9
-    }
-    .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .muted{color:var(--muted)}
-    label{font-size:13px;color:var(--muted)}
+    .stat b{display:block;margin-top:3px;font-size:.92rem}
+    label{font-size:12px;color:var(--muted)}
     select,input[type=number]{
-      width:100%;margin-top:6px;background:#12151c;color:var(--text);
+      width:100%;margin-top:5px;background:#0f131b;color:var(--text);
       border:1px solid #2a2f3a;border-radius:8px;padding:8px
     }
-    .bar{
-      height:8px;background:#0c0e13;border-radius:99px;overflow:hidden;margin-top:10px
+    .view-wrap{
+      position:relative;border-radius:12px;overflow:hidden;
+      border:1px solid #2a2f3a;background:#000;aspect-ratio: 2 / 1;
     }
-    .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7aa2ff,#3dd68c);transition:width .25s}
+    canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+    .log{
+      font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;
+      white-space:pre-wrap;background:#0c0e13;border:1px solid #242a36;
+      border-radius:10px;padding:10px;min-height:120px;max-height:180px;overflow:auto;color:#c9d1d9
+    }
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .muted{color:var(--muted)}
+    .bar{height:7px;background:#0c0e13;border-radius:99px;overflow:hidden;margin-top:10px}
+    .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7aa2ff,#3dd68c);transition:width .2s}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Динамический паттерн → минимум джиттера</h1>
+    <h1>AI-настройка паттерна + живое изображение</h1>
     <div class="sub">
-      Паттерн создаётся в памяти, подстраивается под текущий джиттер системы,
-      останавливается на лучшем результате — после этого можно скачать.
+      Паттерн динамически формируется в памяти, AI-контур подстраивает его под минимальный джиттер.
+      Справа/ниже — визуализация формирования. После остановки можно скачать .bin.
     </div>
 
     <div class="card">
-      <label>Размер паттерна (МБ)</label>
-      <select id="sizeMb">
-        <option value="4">4</option>
-        <option value="8" selected>8</option>
-        <option value="16">16</option>
-        <option value="32">32</option>
-      </select>
-
-      <label style="display:block;margin-top:10px">Максимум шагов подстройки</label>
-      <input id="maxSteps" type="number" min="2" max="20" value="8" />
-
+      <div class="grid" style="margin-top:0">
+        <div>
+          <label>Размер (МБ)</label>
+          <select id="sizeMb">
+            <option value="2">2</option>
+            <option value="4" selected>4</option>
+            <option value="8">8</option>
+            <option value="16">16</option>
+          </select>
+        </div>
+        <div>
+          <label>Шагов AI</label>
+          <input id="maxSteps" type="number" min="2" max="16" value="6" />
+        </div>
+      </div>
       <div class="row">
-        <button id="btnStart">Сформировать и настроить</button>
-        <button id="btnDownload" class="secondary" disabled>Скачать pattern.bin</button>
+        <button id="btnStart">AI: сформировать и настроить</button>
+        <button id="btnDownload" class="secondary" disabled>Скачать .bin</button>
         <button id="btnStop" class="secondary" disabled>Стоп</button>
       </div>
       <div class="bar"><i id="progress"></i></div>
     </div>
 
     <div class="card">
+      <div class="muted" style="margin-bottom:8px">Визуализация паттерна (формируется в реальном времени)</div>
+      <div class="view-wrap">
+        <canvas id="cv" width="512" height="256"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="grid">
         <div class="stat">Статус<b id="stStatus">ожидание</b></div>
-        <div class="stat">Текущий σ<b id="stStd">—</b></div>
+        <div class="stat">σ сейчас<b id="stStd">—</b></div>
         <div class="stat">Лучший σ<b id="stBest">—</b></div>
-        <div class="stat">Шаг<b id="stStep">—</b></div>
+        <div class="stat">Шаг AI<b id="stStep">—</b></div>
         <div class="stat">RAM<b id="stRam">нет</b></div>
         <div class="stat">CPU touch<b id="stCpu">нет</b></div>
       </div>
     </div>
 
     <div class="card">
-      <div class="muted" style="margin-bottom:6px">Лог</div>
+      <div class="muted" style="margin-bottom:6px">Лог AI</div>
       <div class="log" id="log"></div>
     </div>
   </div>
@@ -103,12 +117,16 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
+  const cv = $('cv');
+  const ctx = cv.getContext('2d', { alpha: false });
   const logEl = $('log');
+
   let pattern = null;
   let bestPattern = null;
   let bestStd = Infinity;
   let keepTimer = null;
   let active = false;
+  let imgData = ctx.createImageData(cv.width, cv.height);
 
   const log = (m, c='') => {
     const d = document.createElement('div');
@@ -118,12 +136,42 @@
     logEl.scrollTop = logEl.scrollHeight;
   };
 
-  const setProgress = (p) => { $('progress').style.width = Math.max(0, Math.min(100, p)) + '%'; };
+  const setProgress = p => { $('progress').style.width = Math.max(0, Math.min(100, p)) + '%'; };
 
-  async function measureJitter(samples = 1400) {
+  // ===== Визуализация: байты паттерна → пиксели =====
+  function drawPattern(buf, partial = 1) {
+    if (!buf || buf.length === 0) return;
+    const w = cv.width, h = cv.height;
+    const totalPixels = w * h;
+    const useLen = Math.max(1, Math.floor(buf.length * Math.max(0.01, Math.min(1, partial))));
+    const data = imgData.data;
+
+    for (let p = 0; p < totalPixels; p++) {
+      const src = buf[((p * useLen / totalPixels) | 0) % useLen];
+      // псевдоцвет: холодный → тёплый
+      const v = src;
+      const r = Math.min(255, (v * 1.2) | 0);
+      const g = Math.min(255, (v * 0.7 + 40) | 0);
+      const b = Math.min(255, (255 - v * 0.9 + 30) | 0);
+      const o = p * 4;
+      data[o] = r; data[o+1] = g; data[o+2] = b; data[o+3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  // анимация "формирования" по мере заполнения
+  async function animateFormation(buf) {
+    const frames = 12;
+    for (let f = 1; f <= frames && active; f++) {
+      drawPattern(buf, f / frames);
+      await new Promise(r => setTimeout(r, 30));
+    }
+    drawPattern(buf, 1);
+  }
+
+  async function measureJitter(samples = 1100) {
     let t = performance.now();
-    for (let i = 0; i < 1000; i++) t = performance.now();
-
+    for (let i = 0; i < 800; i++) t = performance.now();
     const deltas = new Float64Array(samples);
     let prev = performance.now();
     for (let i = 0; i < samples; i++) {
@@ -135,33 +183,17 @@
       prev = now;
       if ((i & 127) === 0) await new Promise(r => setTimeout(r, 0));
     }
-
-    let sum = 0, sum2 = 0, min = Infinity, max = -Infinity;
-    for (let i = 0; i < samples; i++) {
-      const d = deltas[i];
-      sum += d; sum2 += d * d;
-      if (d < min) min = d;
-      if (d > max) max = d;
-    }
-    const mean = sum / samples;
-    const std = Math.sqrt(Math.max(0, sum2 / samples - mean * mean));
-
-    const bins = 20;
-    const hist = new Array(bins).fill(0);
-    const span = Math.max(1e-9, max - min);
-    for (let i = 0; i < samples; i++) {
-      let b = Math.floor(((deltas[i] - min) / span) * bins);
-      if (b < 0) b = 0;
-      if (b >= bins) b = bins - 1;
-      hist[b]++;
-    }
-    const histNorm = hist.map(v => v / samples);
-
-    let seed = (Math.floor(mean * 1e6) ^ Math.floor(std * 1e7) ^ Math.floor(max * 1e5)) >>> 0;
-    seed = Math.imul(seed ^ (seed >>> 16), 0x7feb352d);
-    seed = Math.imul(seed ^ (seed >>> 15), 0x846ca68b);
-    seed = (seed ^ (seed >>> 16)) >>> 0;
-
+    let sum=0,sum2=0,min=Infinity,max=-Infinity;
+    for (let i=0;i<samples;i++){const d=deltas[i];sum+=d;sum2+=d*d;if(d<min)min=d;if(d>max)max=d;}
+    const mean=sum/samples;
+    const std=Math.sqrt(Math.max(0,sum2/samples-mean*mean));
+    const bins=20, hist=new Array(bins).fill(0), span=Math.max(1e-9,max-min);
+    for(let i=0;i<samples;i++){let b=(Math.floor(((deltas[i]-min)/span)*bins)); if(b<0)b=0; if(b>=bins)b=bins-1; hist[b]++;}
+    const histNorm=hist.map(v=>v/samples);
+    let seed=(Math.floor(mean*1e6)^Math.floor(std*1e7)^Math.floor(max*1e5))>>>0;
+    seed=Math.imul(seed^(seed>>>16),0x7feb352d);
+    seed=Math.imul(seed^(seed>>>15),0x846ca68b);
+    seed=(seed^(seed>>>16))>>>0;
     return {
       mean, std, histNorm, seed,
       chaos: Math.min(1.5, 0.3 + std * 8),
@@ -170,64 +202,72 @@
     };
   }
 
-  function buildPattern(bytes, jp, step) {
+  // AI-генерация: параметры зависят от джиттера + номера шага обучения
+  function aiBuildPattern(bytes, jp, step, bestStdSoFar) {
     const out = new Uint8Array(bytes);
-    const PHI = 1.618033988749895;
-    const PI = Math.PI;
+    const PHI = 1.618033988749895, PI = Math.PI;
     let s1 = (0xDEADBEEF ^ jp.seed ^ (step * 0x9E3779B9)) >>> 0;
     let s2 = (0x12345679 ^ (jp.seed * 0x85EB) ^ step) >>> 0;
     let prev = 0;
 
-    const mix = (x) => {
+    const mix = x => {
       x = (x + 0x9E3779B9) >>> 0;
       x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
       x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
       return (x ^ (x >>> 16)) >>> 0;
     };
 
-    // динамическая подстройка: с каждым шагом сильнее anti-attract / dissipate
-    const adapt = 1 + Math.min(1.8, step * 0.15 + jp.std * 2);
+    // AI-адаптация: если джиттер высокий / нет улучшения — усиливаем рассеивание
+    const needMoreDamp = !isFinite(bestStdSoFar) || jp.std >= bestStdSoFar * 0.98;
+    const adapt = 1 + Math.min(2.0, step * 0.18 + jp.std * 2.2 + (needMoreDamp ? 0.25 : 0));
+
     const base = [0.03, 0.09, 0.25, 0.8, 2.1, 5.5, 12, 20];
-    const freq = base.map((f, i) => f * (1 + (jp.histNorm[i % jp.histNorm.length] - 1 / base.length) * jp.chaos));
+    const freq = base.map((f,i)=>f*(1+(jp.histNorm[i%jp.histNorm.length]-1/base.length)*jp.chaos));
 
-    for (let i = 0; i < bytes; i++) {
-      s1 = mix(s1 + i);
-      s2 = mix(s2 + Math.imul(i, 0x9E3779B9));
-      const theta = (2 * PI * PHI * i) / 256;
+    // генерируем блоками и обновляем картинку
+    const block = Math.max(4096, (bytes / 32) | 0);
 
-      let waves = 0;
-      for (let k = 0; k < freq.length; k++) {
-        waves += Math.sin(theta * freq[k] + jp.histNorm[k % jp.histNorm.length] * PI);
+    return { out, generate: async function() {
+      for (let i = 0; i < bytes; i++) {
+        s1 = mix(s1 + i);
+        s2 = mix(s2 + Math.imul(i, 0x9E3779B9));
+        const theta = (2 * PI * PHI * i) / 256;
+
+        let waves = 0;
+        for (let k = 0; k < freq.length; k++) {
+          waves += Math.sin(theta * freq[k] + jp.histNorm[k % jp.histNorm.length] * PI);
+        }
+        waves /= freq.length;
+
+        const t128 = Math.sin((2 * PI * i) / (256 / 128));
+        const t64  = Math.sin((2 * PI * i) / (256 / 64));
+        const local = 0.5 * waves + 0.3 * t128 + 0.2 * t64;
+        const coherence = Math.min(1, Math.abs(local - prev));
+        const antiAttract = (1 - coherence) * (0.65 + 0.35 * jp.attractPenalty) * adapt;
+        prev = local;
+
+        const dissipate = (0.5 + 0.5 * Math.sin(theta * 0.37)) * jp.damp * adapt;
+        const antiShunt = (0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25)) * adapt;
+
+        let raw =
+          0.10 * waves + 0.05 * t128 + 0.04 * t64 +
+          0.17 * dissipate + 0.16 * antiShunt + 0.16 * antiAttract +
+          0.07 * Math.sin(theta * (0.15 + jp.std * 3)) +
+          0.05 * ((s1 & 255) / 255) + 0.04 * ((s2 & 255) / 255);
+
+        let val = Math.floor(((raw + 1) * 127.5) % 256);
+        if (val < 0) val += 256;
+        out[i] = val & 255;
+
+        if ((i % block) === 0) {
+          drawPattern(out.subarray(0, i + 1), 1);
+          await new Promise(r => setTimeout(r, 0));
+          if (!active) break;
+        }
       }
-      waves /= freq.length;
-
-      const t128 = Math.sin((2 * PI * i) / (256 / 128));
-      const t64  = Math.sin((2 * PI * i) / (256 / 64));
-
-      const local = 0.5 * waves + 0.3 * t128 + 0.2 * t64;
-      const coherence = Math.min(1, Math.abs(local - prev));
-      const antiAttract = (1 - coherence) * (0.65 + 0.35 * jp.attractPenalty) * adapt;
-      prev = local;
-
-      const dissipate = (0.5 + 0.5 * Math.sin(theta * 0.37)) * jp.damp * adapt;
-      const antiShunt = (0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25)) * adapt;
-
-      let raw =
-        0.11 * waves +
-        0.06 * t128 +
-        0.05 * t64 +
-        0.16 * dissipate +
-        0.15 * antiShunt +
-        0.15 * antiAttract +
-        0.07 * Math.sin(theta * (0.15 + jp.std * 3)) +
-        0.05 * ((s1 & 255) / 255) +
-        0.04 * ((s2 & 255) / 255);
-
-      let val = Math.floor(((raw + 1) * 127.5) % 256);
-      if (val < 0) val += 256;
-      out[i] = val & 255;
-    }
-    return out;
+      drawPattern(out, 1);
+      return out;
+    }};
   }
 
   function startTouch() {
@@ -248,13 +288,13 @@
     $('stCpu').textContent = 'нет';
   }
 
-  async function runDynamic() {
+  async function runAI() {
     if (active) return;
     active = true;
 
     const mb = parseInt($('sizeMb').value, 10);
     const bytes = mb * 1024 * 1024;
-    const maxSteps = Math.max(2, Math.min(20, parseInt($('maxSteps').value, 10) || 8));
+    const maxSteps = Math.max(2, Math.min(16, parseInt($('maxSteps').value, 10) || 6));
 
     $('btnStart').disabled = true;
     $('btnDownload').disabled = true;
@@ -263,67 +303,72 @@
     bestPattern = null;
     pattern = null;
     setProgress(0);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, cv.width, cv.height);
 
-    log(`Старт динамической настройки (${mb} МБ, до ${maxSteps} шагов)`);
-    $('stStatus').textContent = 'настройка...';
+    log(`AI-старт: ${mb} МБ, шагов до ${maxSteps}`);
+    $('stStatus').textContent = 'AI настройка...';
     $('stRam').textContent = 'нет';
 
     let noImprove = 0;
 
     for (let step = 1; step <= maxSteps && active; step++) {
       $('stStep').textContent = `${step}/${maxSteps}`;
-      setProgress((step - 1) / maxSteps * 100);
+      setProgress(((step - 1) / maxSteps) * 100);
 
-      // 1) замер джиттера
-      const jp = await measureJitter(1200);
+      const jp = await measureJitter(1000);
       $('stStd').textContent = jp.std.toFixed(4) + ' ms';
-      log(`Шаг ${step}: σ=${jp.std.toFixed(4)} ms`);
+      log(`AI шаг ${step}: входной σ=${jp.std.toFixed(4)}`);
 
-      // 2) динамическая генерация в памяти под текущий джиттер
+      let built;
       try {
-        pattern = buildPattern(bytes, jp, step);
+        const job = aiBuildPattern(bytes, jp, step, bestStd);
+        $('stStatus').textContent = `формирование ${step}/${maxSteps}`;
+        built = await job.generate(); // с живой отрисовкой
       } catch (e) {
-        log('Ошибка памяти: ' + e.message, 'bad');
+        log('Ошибка генерации: ' + e.message, 'bad');
         break;
       }
+      if (!active) break;
+
+      pattern = built;
       $('stRam').textContent = mb + ' МБ';
       startTouch();
+      await animateFormation(pattern);
 
-      // 3) короткая выдержка + повторный замер (эффект после удержания)
-      await new Promise(r => setTimeout(r, 280));
-      const after = await measureJitter(1000);
+      await new Promise(r => setTimeout(r, 250));
+      const after = await measureJitter(900);
       $('stStd').textContent = after.std.toFixed(4) + ' ms';
-      log(`  после удержания: σ=${after.std.toFixed(4)} ms`);
+      log(`  контроль σ=${after.std.toFixed(4)}`);
 
-      // 4) сохраняем лучший
       if (after.std < bestStd) {
         bestStd = after.std;
         bestPattern = new Uint8Array(pattern);
         $('stBest').textContent = bestStd.toFixed(4) + ' ms';
         noImprove = 0;
-        log(`  лучший обновлён: ${bestStd.toFixed(4)} ms`, 'ok');
+        log(`  AI: лучший паттерн обновлён`, 'ok');
+        drawPattern(bestPattern, 1);
       } else {
         noImprove++;
-        log(`  без улучшения (${noImprove})`, 'warn');
+        log(`  AI: без улучшения (${noImprove})`, 'warn');
       }
 
-      // ранний стоп: 2 раза подряд нет улучшения
       if (noImprove >= 2 && step >= 3) {
-        log('Улучшения нет — остановка на лучшем паттерне', 'warn');
+        log('AI: улучшений больше нет — остановка', 'warn');
         break;
       }
     }
 
-    // финал: оставляем только лучший
     if (bestPattern) {
       pattern = bestPattern;
-      $('stRam').textContent = mb + ' МБ';
+      drawPattern(pattern, 1);
       startTouch();
+      $('stRam').textContent = mb + ' МБ';
       $('stStd').textContent = bestStd.toFixed(4) + ' ms';
       $('stStatus').textContent = 'готов';
       setProgress(100);
       $('btnDownload').disabled = false;
-      log(`Готово. Минимальный σ=${bestStd.toFixed(4)} ms. Можно скачать.`, 'ok');
+      log(`Готово. Мин. σ=${bestStd.toFixed(4)} ms. Можно скачать.`, 'ok');
     } else {
       $('stStatus').textContent = 'ошибка';
       log('Паттерн не сформирован', 'bad');
@@ -341,28 +386,29 @@
     $('btnStop').disabled = true;
     $('btnStart').disabled = false;
     if (pattern) $('btnDownload').disabled = false;
-    log('Остановлено пользователем');
+    log('Остановлено');
   }
 
-  $('btnStart').onclick = () => runDynamic().catch(e => {
+  $('btnStart').onclick = () => runAI().catch(e => {
     active = false;
     log(String(e), 'bad');
     $('btnStart').disabled = false;
     $('btnStop').disabled = true;
   });
-
   $('btnStop').onclick = stopAll;
-
   $('btnDownload').onclick = () => {
     if (!pattern) return;
-    const blob = new Blob([pattern], { type: 'application/octet-stream' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = URL.createObjectURL(new Blob([pattern], { type: 'application/octet-stream' }));
     a.download = 'adaptive_chameleon_pattern.bin';
     a.click();
     URL.revokeObjectURL(a.href);
-    log('Скачивание adaptive_chameleon_pattern.bin', 'ok');
+    log('Скачивание .bin', 'ok');
   };
+
+  // стартовый чёрный кадр
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, cv.width, cv.height);
 })();
 </script>
 </body>
