@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Pattern Full — RAM/Storage + AutoSave + BH Repair</title>
+  <title>AI Pattern — Triple Gates CPU/RAM/SSD</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -17,7 +17,7 @@
       min-height:100vh;
     }
     .wrap{max-width:980px;margin:0 auto;padding:20px 14px 48px}
-    h1{font-size:1.25rem;margin:0 0 6px}
+    h1{font-size:1.22rem;margin:0 0 6px}
     .sub{color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:12px}
     .card{
       background:var(--card);border:1px solid #262c3a;border-radius:14px;
@@ -37,7 +37,7 @@
     .stat{
       background:#0f131b;border:1px solid #242a36;border-radius:10px;padding:8px 10px
     }
-    .stat b{display:block;margin-top:3px;font-size:.92rem;word-break:break-all}
+    .stat b{display:block;margin-top:3px;font-size:.9rem;word-break:break-all}
     label{font-size:12px;color:var(--muted)}
     select,input[type=number]{
       width:100%;margin-top:5px;background:#0f131b;color:var(--text);
@@ -61,11 +61,11 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>AI Pattern Full</h1>
+    <h1>AI Pattern · Triple Frequency Gates (CPU / RAM / SSD)</h1>
     <div class="sub">
-      RAM + Storage проверка · автосохранение на диск · AI-настройка · live-картинка ·
-      blackHoleCalmRepair · без лимита размера в коде.
-      SMART SSD из браузера недоступен — проверяется квота Storage.
+      Тройные масштабные «ворота»: CPU 64B · RAM 4K · SSD 64K/1MB.
+      Это структурная синхронизация данных по уровням доступа, не физическая шина между чипами.
+      + AI · live-картинка · BH calm/repair · RAM/Storage check · автосохранение · без лимита размера.
     </div>
 
     <div class="card">
@@ -80,7 +80,7 @@
             <option value="128">128 МБ</option>
             <option value="256">256 МБ</option>
             <option value="auto" selected>Авто</option>
-            <option value="custom">Свой размер…</option>
+            <option value="custom">Свой…</option>
           </select>
         </div>
         <div>
@@ -92,7 +92,6 @@
           <input id="maxSteps" type="number" min="2" max="30" value="8" />
         </div>
       </div>
-
       <div class="row">
         <button id="btnStart">AI: сформировать и настроить</button>
         <button id="btnDownload" class="secondary" disabled>Скачать ещё раз</button>
@@ -103,10 +102,8 @@
     </div>
 
     <div class="card">
-      <div class="muted" style="margin-bottom:8px">Визуализация формирования паттерна</div>
-      <div class="view-wrap">
-        <canvas id="cv" width="512" height="256"></canvas>
-      </div>
+      <div class="muted" style="margin-bottom:8px">Live-формирование паттерна</div>
+      <div class="view-wrap"><canvas id="cv" width="512" height="256"></canvas></div>
     </div>
 
     <div class="card">
@@ -117,10 +114,11 @@
         <div class="stat">Шаг AI<b id="stStep">—</b></div>
         <div class="stat">RAM check<b id="stRamCheck">—</b></div>
         <div class="stat">Storage<b id="stStorage">—</b></div>
-        <div class="stat">RAM pattern<b id="stRam">нет</b></div>
+        <div class="stat">Pattern RAM<b id="stRam">нет</b></div>
         <div class="stat">CPU touch<b id="stCpu">нет</b></div>
         <div class="stat">GPU<b id="stGpu">нет</b></div>
         <div class="stat">Диск<b id="stDisk">нет</b></div>
+        <div class="stat">Gates<b id="stGates">CPU·RAM·SSD</b></div>
       </div>
     </div>
 
@@ -137,42 +135,33 @@
   const ctx = cv.getContext('2d', { alpha: false });
   const logEl = $('log');
 
-  let pattern = null;
-  let bestPattern = null;
-  let bestStd = Infinity;
-  let keepTimer = null;
-  let gpuDevice = null;
-  let gpuBuffer = null;
-  let active = false;
+  // Масштабы «ворот»
+  const GATE_CPU = 64;        // cache-line
+  const GATE_RAM = 4096;      // page
+  const GATE_SSD = 65536;     // 64K block
+  const GATE_SSD_BIG = 1048576; // 1MB extent
+
+  let pattern = null, bestPattern = null, bestStd = Infinity;
+  let keepTimer = null, gpuDevice = null, gpuBuffer = null, active = false;
   const imgData = ctx.createImageData(cv.width, cv.height);
 
-  const log = (m, c = '') => {
+  const log = (m, c='') => {
     const d = document.createElement('div');
     if (c) d.className = c;
     d.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
-    logEl.appendChild(d);
-    logEl.scrollTop = logEl.scrollHeight;
+    logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;
   };
-
-  const setProgress = p => {
-    $('progress').style.width = Math.max(0, Math.min(100, p)) + '%';
-  };
+  const setProgress = p => { $('progress').style.width = Math.max(0, Math.min(100, p)) + '%'; };
 
   function updateMemHint() {
     const dm = navigator.deviceMemory;
-    $('memHint').textContent = dm
-      ? `deviceMemory ≈ ${dm} ГБ (авто-размер от этого)`
-      : 'deviceMemory недоступен — авто = 32 МБ';
+    $('memHint').textContent = dm ? `deviceMemory ≈ ${dm} ГБ` : 'deviceMemory n/a → авто 32 МБ';
   }
   updateMemHint();
 
-  // ===== размер без верхнего лимита =====
   function pickSizeMb() {
     const mode = $('sizeMode').value;
-    if (mode === 'custom') {
-      const v = parseInt($('customMb').value, 10);
-      return Math.max(1, v || 1);
-    }
+    if (mode === 'custom') return Math.max(1, parseInt($('customMb').value, 10) || 1);
     if (mode === 'auto') {
       const dm = navigator.deviceMemory;
       if (!dm) return 32;
@@ -185,82 +174,63 @@
     return Math.max(1, parseInt(mode, 10) || 8);
   }
 
-  // ===== проверка RAM + Storage =====
   async function checkRamAndStorage(needBytes) {
     const report = { ramOk: true, storageOk: true, messages: [] };
     const dm = navigator.deviceMemory || null;
     const needGB = needBytes / (1024 ** 3);
-
     if (dm != null) {
       if (needGB * 2 > dm) {
         report.ramOk = false;
-        report.messages.push(`RAM: маловато (≈${dm} ГБ, паттерн ≈${needGB.toFixed(2)} ГБ)`);
+        report.messages.push(`RAM: мало (≈${dm} ГБ, нужно запас под ≈${needGB.toFixed(2)} ГБ)`);
         $('stRamCheck').textContent = 'мало';
       } else {
-        report.messages.push(`RAM: deviceMemory ≈ ${dm} ГБ — ок`);
+        report.messages.push(`RAM: ≈${dm} ГБ — ок`);
         $('stRamCheck').textContent = dm + ' ГБ';
       }
     } else {
       report.messages.push('RAM: deviceMemory недоступен');
       $('stRamCheck').textContent = 'n/a';
     }
-
     try {
-      if (navigator.storage && navigator.storage.estimate) {
+      if (navigator.storage?.estimate) {
         const est = await navigator.storage.estimate();
-        const quota = est.quota || 0;
-        const usage = est.usage || 0;
-        const free = Math.max(0, quota - usage);
-        report.messages.push(
-          `Storage: свободно ≈${(free / 1024 / 1024).toFixed(0)} МБ / ${(quota / 1024 / 1024).toFixed(0)} МБ`
-        );
+        const free = Math.max(0, (est.quota || 0) - (est.usage || 0));
         $('stStorage').textContent = (free / 1024 / 1024).toFixed(0) + ' МБ free';
+        report.messages.push(`Storage free ≈${(free/1024/1024).toFixed(0)} МБ`);
         if (free < needBytes * 0.2) {
           report.storageOk = false;
-          report.messages.push('Storage: мало квоты браузера');
+          report.messages.push('Storage: мало квоты');
         }
       } else {
-        report.messages.push('Storage API недоступен');
         $('stStorage').textContent = 'n/a';
+        report.messages.push('Storage API нет');
       }
     } catch (e) {
-      report.messages.push('Storage error: ' + e.message);
       $('stStorage').textContent = 'ошибка';
+      report.messages.push('Storage: ' + e.message);
     }
-
     return report;
   }
 
-  // ===== автосохранение на диск =====
-  function autoDownloadBin(buf, filename = 'adaptive_chameleon_pattern.bin') {
-    const blob = new Blob([buf], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
+  function autoDownloadBin(buf, filename='adaptive_chameleon_pattern.bin') {
+    const url = URL.createObjectURL(new Blob([buf], { type: 'application/octet-stream' }));
     const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href = url; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
-  async function autoSaveToDisk(buf, filename = 'adaptive_chameleon_pattern.bin') {
+  async function autoSaveToDisk(buf, filename='adaptive_chameleon_pattern.bin') {
     if (window.showSaveFilePicker) {
       try {
         const handle = await showSaveFilePicker({
           suggestedName: filename,
-          types: [{
-            description: 'Binary pattern',
-            accept: { 'application/octet-stream': ['.bin'] }
-          }]
+          types: [{ description: 'Binary pattern', accept: { 'application/octet-stream': ['.bin'] } }]
         });
-        const writable = await handle.createWritable();
-        await writable.write(buf);
-        await writable.close();
+        const w = await handle.createWritable();
+        await w.write(buf); await w.close();
         return { method: 'file-picker', ok: true };
       } catch (e) {
-        // отмена или ошибка → fallback download
         autoDownloadBin(buf, filename);
         return { method: 'download-fallback', ok: true, error: String(e.message || e) };
       }
@@ -269,21 +239,18 @@
     return { method: 'download', ok: true };
   }
 
-  // ===== визуализация =====
-  function drawPattern(buf, partial = 1) {
-    if (!buf || buf.length === 0) return;
-    const w = cv.width, h = cv.height;
-    const total = w * h;
+  function drawPattern(buf, partial=1) {
+    if (!buf?.length) return;
+    const w = cv.width, h = cv.height, total = w * h;
     const useLen = Math.max(1, Math.floor(buf.length * Math.max(0.01, Math.min(1, partial))));
     const data = imgData.data;
     for (let p = 0; p < total; p++) {
-      const src = buf[((p * useLen / total) | 0) % useLen];
-      const v = src;
+      const v = buf[((p * useLen / total) | 0) % useLen];
       const o = p * 4;
       data[o] = Math.min(255, (v * 1.25) | 0);
-      data[o + 1] = Math.min(255, (v * 0.75 + 35) | 0);
-      data[o + 2] = Math.min(255, ((255 - v) * 0.9 + 25) | 0);
-      data[o + 3] = 255;
+      data[o+1] = Math.min(255, (v * 0.75 + 35) | 0);
+      data[o+2] = Math.min(255, ((255 - v) * 0.9 + 25) | 0);
+      data[o+3] = 255;
     }
     ctx.putImageData(imgData, 0, 0);
   }
@@ -296,56 +263,64 @@
     drawPattern(buf, 1);
   }
 
-  // ===== black hole calm/repair =====
   function blackHoleCalmRepair(raw, prevRaw, runMean) {
-    const localEnergy = Math.abs(raw);
-    const holeRisk = Math.max(0, (runMean - localEnergy) / (runMean + 1e-6));
-    const spikeRisk = Math.max(0, (localEnergy - runMean * 1.8) / (localEnergy + 1e-6));
+    const e = Math.abs(raw);
+    const holeRisk = Math.max(0, (runMean - e) / (runMean + 1e-6));
+    const spikeRisk = Math.max(0, (e - runMean * 1.8) / (e + 1e-6));
     const calm = raw * (1 - 0.35 * spikeRisk) + runMean * Math.sign(raw || 1) * 0.35 * spikeRisk;
     const repair = calm + holeRisk * 0.45 * (runMean * Math.sign(calm || 1) - calm);
     const limited = Math.tanh(repair * 1.1);
-    const smooth = limited * 0.82 + prevRaw * 0.18;
-    return { out: smooth, holeRisk, spikeRisk };
+    return { out: limited * 0.82 + prevRaw * 0.18, holeRisk, spikeRisk };
   }
 
-  // ===== jitter =====
-  async function measureJitter(samples = 1000) {
+  // ===== ТРОЙНЫЕ ЧАСТОТНЫЕ ВОРОТА CPU / RAM / SSD =====
+  function tripleFrequencyGates(i, theta, adapt) {
+    // CPU-gate: cache-line 64B
+    const cpu = Math.sin((2 * Math.PI * i) / GATE_CPU + theta * 0.15);
+
+    // RAM-gate: page 4K
+    const ram = Math.sin((2 * Math.PI * i) / GATE_RAM + theta * 0.07);
+
+    // SSD-gate: 64K + медленная 1MB огибающая
+    const ssd = Math.sin((2 * Math.PI * i) / GATE_SSD + theta * 0.03);
+    const ssdBig = Math.sin((2 * Math.PI * i) / GATE_SSD_BIG + theta * 0.01);
+
+    // Фазовая связка «передачи» между уровнями (структурная, не аппаратная)
+    const linkCR = Math.sin(((2 * Math.PI * i) / GATE_CPU) + ((2 * Math.PI * i) / GATE_RAM));
+    const linkRS = Math.sin(((2 * Math.PI * i) / GATE_RAM) + ((2 * Math.PI * i) / GATE_SSD));
+
+    // Веса: CPU чуть выше для touch, SSD — для устойчивости крупных блоков
+    const gate =
+      0.28 * cpu +
+      0.24 * ram +
+      0.18 * ssd +
+      0.10 * ssdBig +
+      0.12 * linkCR +
+      0.08 * linkRS;
+
+    return gate * adapt;
+  }
+
+  async function measureJitter(samples=1000) {
     let t = performance.now();
     for (let i = 0; i < 700; i++) t = performance.now();
     const deltas = new Float64Array(samples);
     let prev = performance.now();
     for (let i = 0; i < samples; i++) {
-      let x = i;
-      x = Math.imul(x ^ (x << 13), 0x5bd1e995);
-      x ^= x >>> 15;
-      const now = performance.now();
-      deltas[i] = now - prev;
-      prev = now;
+      let x = i; x = Math.imul(x ^ (x << 13), 0x5bd1e995); x ^= x >>> 15;
+      const now = performance.now(); deltas[i] = now - prev; prev = now;
       if ((i & 127) === 0) await new Promise(r => setTimeout(r, 0));
     }
-    let sum = 0, sum2 = 0, min = Infinity, max = -Infinity;
-    for (let i = 0; i < samples; i++) {
-      const d = deltas[i];
-      sum += d; sum2 += d * d;
-      if (d < min) min = d;
-      if (d > max) max = d;
-    }
-    const mean = sum / samples;
-    const std = Math.sqrt(Math.max(0, sum2 / samples - mean * mean));
-    const bins = 24;
-    const hist = new Array(bins).fill(0);
-    const span = Math.max(1e-9, max - min);
-    for (let i = 0; i < samples; i++) {
-      let b = Math.floor(((deltas[i] - min) / span) * bins);
-      if (b < 0) b = 0;
-      if (b >= bins) b = bins - 1;
-      hist[b]++;
-    }
-    const histNorm = hist.map(v => v / samples);
-    let seed = (Math.floor(mean * 1e6) ^ Math.floor(std * 1e7) ^ Math.floor(max * 1e5)) >>> 0;
-    seed = Math.imul(seed ^ (seed >>> 16), 0x7feb352d);
-    seed = Math.imul(seed ^ (seed >>> 15), 0x846ca68b);
-    seed = (seed ^ (seed >>> 16)) >>> 0;
+    let sum=0,sum2=0,min=Infinity,max=-Infinity;
+    for (let i=0;i<samples;i++){const d=deltas[i];sum+=d;sum2+=d*d;if(d<min)min=d;if(d>max)max=d;}
+    const mean=sum/samples, std=Math.sqrt(Math.max(0,sum2/samples-mean*mean));
+    const bins=24, hist=new Array(bins).fill(0), span=Math.max(1e-9,max-min);
+    for(let i=0;i<samples;i++){let b=(Math.floor(((deltas[i]-min)/span)*bins)); if(b<0)b=0; if(b>=bins)b=bins-1; hist[b]++;}
+    const histNorm=hist.map(v=>v/samples);
+    let seed=(Math.floor(mean*1e6)^Math.floor(std*1e7)^Math.floor(max*1e5))>>>0;
+    seed=Math.imul(seed^(seed>>>16),0x7feb352d);
+    seed=Math.imul(seed^(seed>>>15),0x846ca68b);
+    seed=(seed^(seed>>>16))>>>0;
     return {
       mean, std, histNorm, seed,
       chaos: Math.min(1.6, 0.3 + std * 8),
@@ -354,15 +329,13 @@
     };
   }
 
-  // ===== AI build =====
   function aiBuildPattern(bytes, jp, step, bestStdSoFar) {
     const out = new Uint8Array(bytes);
-    const PHI = 1.618033988749895;
-    const PI = Math.PI;
+    const PHI = 1.618033988749895, PI = Math.PI;
     let s1 = (0xDEADBEEF ^ jp.seed ^ (step * 0x9E3779B9)) >>> 0;
     let s2 = (0x12345679 ^ (jp.seed * 0x85EB) ^ step) >>> 0;
     let prev = 0, prevRaw = 0, runMean = 0.15;
-    const mix = (x) => {
+    const mix = x => {
       x = (x + 0x9E3779B9) >>> 0;
       x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
       x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
@@ -371,7 +344,7 @@
     const needMoreDamp = !isFinite(bestStdSoFar) || jp.std >= bestStdSoFar * 0.98;
     const adapt = 1 + Math.min(2.2, step * 0.16 + jp.std * 2.2 + (needMoreDamp ? 0.3 : 0));
     const base = [0.025, 0.07, 0.18, 0.5, 1.2, 3.0, 7.5, 14, 22];
-    const freq = base.map((f, i) => f * (1 + (jp.histNorm[i % jp.histNorm.length] - 1 / base.length) * jp.chaos));
+    const freq = base.map((f,i)=>f*(1+(jp.histNorm[i%jp.histNorm.length]-1/base.length)*jp.chaos));
     const block = Math.max(8192, (bytes / 40) | 0);
     let holeAcc = 0, spikeAcc = 0;
 
@@ -381,25 +354,38 @@
           s1 = mix(s1 + i);
           s2 = mix(s2 + Math.imul(i, 0x9E3779B9));
           const theta = (2 * PI * PHI * i) / 256;
+
           let waves = 0;
           for (let k = 0; k < freq.length; k++) {
             waves += Math.sin(theta * freq[k] + jp.histNorm[k % jp.histNorm.length] * PI);
           }
           waves /= freq.length;
+
           const t128 = Math.sin((2 * PI * i) / (256 / 128));
           const t64  = Math.sin((2 * PI * i) / (256 / 64));
-          const sub  = Math.sin((2 * PI * i) / ((256 / 128) / 8));
-          const local = 0.46 * waves + 0.28 * t128 + 0.16 * t64 + 0.10 * sub;
+
+          // Тройные ворота CPU/RAM/SSD
+          const gates = tripleFrequencyGates(i, theta, adapt);
+
+          const local = 0.34 * waves + 0.18 * t128 + 0.12 * t64 + 0.36 * gates;
           const coherence = Math.min(1, Math.abs(local - prev));
           const antiAttract = (1 - coherence) * (0.65 + 0.35 * jp.attractPenalty) * adapt;
           prev = local;
+
           const dissipate = (0.5 + 0.5 * Math.sin(theta * 0.37)) * jp.damp * adapt;
           const antiShunt = (0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25)) * adapt;
+
           let raw =
-            0.09 * waves + 0.05 * t128 + 0.04 * t64 + 0.03 * sub +
-            0.15 * dissipate + 0.14 * antiShunt + 0.14 * antiAttract +
-            0.07 * Math.sin(theta * (0.15 + jp.std * 3)) +
-            0.05 * ((s1 & 255) / 255) + 0.04 * ((s2 & 255) / 255);
+            0.08 * waves +
+            0.04 * t128 +
+            0.03 * t64 +
+            0.18 * gates +          // вклад triple gates
+            0.13 * dissipate +
+            0.12 * antiShunt +
+            0.12 * antiAttract +
+            0.06 * Math.sin(theta * (0.15 + jp.std * 3)) +
+            0.05 * ((s1 & 255) / 255) +
+            0.04 * ((s2 & 255) / 255);
 
           runMean = runMean * 0.995 + Math.abs(raw) * 0.005;
           const bh = blackHoleCalmRepair(raw, prevRaw, runMean);
@@ -418,23 +404,23 @@
           }
         }
         drawPattern(out, 1);
-        return {
-          data: out,
-          holeAvg: holeAcc / Math.max(1, bytes),
-          spikeAvg: spikeAcc / Math.max(1, bytes)
-        };
+        return { data: out, holeAvg: holeAcc / Math.max(1, bytes), spikeAvg: spikeAcc / Math.max(1, bytes) };
       }
     };
   }
 
   function startTouch() {
     if (keepTimer) clearInterval(keepTimer);
+    // touch с шагом, кратным cache-line / page — под CPU/RAM gates
     keepTimer = setInterval(() => {
       if (!pattern) return;
       let a = 0;
-      const step = Math.max(1, (pattern.length / 4096) | 0);
+      const step = Math.max(GATE_CPU, (pattern.length / 4096) | 0);
       for (let i = 0; i < pattern.length; i += step) a = (a + pattern[i]) & 255;
-      a ^= pattern[0] ^ pattern[pattern.length >> 1] ^ pattern[pattern.length - 1];
+      // явные точки на границах ворот
+      a ^= pattern[0];
+      a ^= pattern[Math.min(pattern.length - 1, GATE_RAM)];
+      a ^= pattern[Math.min(pattern.length - 1, GATE_SSD)];
       if (a === 999) console.log(a);
     }, 350);
     $('stCpu').textContent = 'активен';
@@ -446,33 +432,24 @@
   }
 
   async function uploadGpu(data) {
-    if (!('gpu' in navigator)) {
-      $('stGpu').textContent = 'нет WebGPU';
-      return;
-    }
+    if (!('gpu' in navigator)) { $('stGpu').textContent = 'нет WebGPU'; return; }
     try {
       const adapter = await navigator.gpu.requestAdapter();
       if (!adapter) throw new Error('no adapter');
       gpuDevice = await adapter.requestDevice();
-      if (gpuBuffer) { try { gpuBuffer.destroy(); } catch (_) {} gpuBuffer = null; }
+      if (gpuBuffer) { try { gpuBuffer.destroy(); } catch(_){} gpuBuffer = null; }
       let size = data.byteLength;
       try {
-        gpuBuffer = gpuDevice.createBuffer({
-          size,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-        });
+        gpuBuffer = gpuDevice.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
         gpuDevice.queue.writeBuffer(gpuBuffer, 0, data);
       } catch (_) {
         size = Math.min(size, 64 * 1024 * 1024);
         const slice = data.subarray(0, size);
-        gpuBuffer = gpuDevice.createBuffer({
-          size: slice.byteLength,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-        });
+        gpuBuffer = gpuDevice.createBuffer({ size: slice.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
         gpuDevice.queue.writeBuffer(gpuBuffer, 0, slice);
         log('GPU: усечённый буфер', 'warn');
       }
-      $('stGpu').textContent = (size / 1024 / 1024).toFixed(1) + ' МБ';
+      $('stGpu').textContent = (size/1024/1024).toFixed(1) + ' МБ';
       log('GPU buffer активен', 'ok');
     } catch (e) {
       $('stGpu').textContent = 'ошибка';
@@ -483,7 +460,6 @@
   async function runAI() {
     if (active) return;
     active = true;
-
     const mb = pickSizeMb();
     const bytes = mb * 1024 * 1024;
     const maxSteps = Math.max(2, Math.min(30, parseInt($('maxSteps').value, 10) || 8));
@@ -491,29 +467,23 @@
     $('btnStart').disabled = true;
     $('btnDownload').disabled = true;
     $('btnStop').disabled = false;
-    bestStd = Infinity;
-    bestPattern = null;
-    pattern = null;
+    bestStd = Infinity; bestPattern = null; pattern = null;
     setProgress(0);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#000'; ctx.fillRect(0,0,cv.width,cv.height);
     $('stDisk').textContent = 'нет';
+    $('stGates').textContent = 'CPU·RAM·SSD';
 
-    log(`AI-старт: ${mb} МБ, шагов ${maxSteps}`);
-    if (mb >= 64) log('Большой размер: возможны долгая генерация / OOM', 'warn');
+    log(`AI-старт: ${mb} МБ | gates 64B / 4K / 64K+1MB`);
+    if (mb >= 64) log('Большой размер: возможен OOM', 'warn');
 
-    // предварительная проверка RAM + Storage
     const pre = await checkRamAndStorage(bytes);
     pre.messages.forEach(m => log(m));
-    if (!pre.ramOk) log('Предупреждение RAM', 'warn');
-    if (!pre.storageOk) log('Предупреждение Storage', 'warn');
 
     $('stStatus').textContent = 'AI настройка...';
     $('stRam').textContent = 'нет';
     $('stGpu').textContent = 'нет';
 
     let noImprove = 0;
-
     for (let step = 1; step <= maxSteps && active; step++) {
       $('stStep').textContent = `${step}/${maxSteps}`;
       setProgress(((step - 1) / maxSteps) * 100);
@@ -556,9 +526,8 @@
         noImprove++;
         log(`  без улучшения (${noImprove})`, 'warn');
       }
-
       if (noImprove >= 2 && step >= 3) {
-        log('AI: стоп без улучшения', 'warn');
+        log('AI: стоп', 'warn');
         break;
       }
     }
@@ -573,18 +542,17 @@
       $('stStatus').textContent = 'сохранение...';
       setProgress(100);
 
-      // финальная проверка + АВТОСОХРАНЕНИЕ НА ДИСК
       const post = await checkRamAndStorage(pattern.byteLength);
       post.messages.forEach(m => log(m));
 
-      log('Автосохранение паттерна на диск...', 'ok');
+      log('Автосохранение на диск...', 'ok');
       const saved = await autoSaveToDisk(pattern, 'adaptive_chameleon_pattern.bin');
       $('stDisk').textContent = saved.method;
-      log(`Диск: ${saved.method}` + (saved.error ? ` (${saved.error})` : ''), 'ok');
+      log('Диск: ' + saved.method, 'ok');
 
       $('stStatus').textContent = 'готов';
       $('btnDownload').disabled = false;
-      log(`Готово. Мин. σ=${bestStd.toFixed(4)} ms`, 'ok');
+      log(`Готово. σ=${bestStd.toFixed(4)} | gates CPU/RAM/SSD`, 'ok');
     } else {
       $('stStatus').textContent = 'ошибка';
       log('Паттерн не сформирован', 'bad');
@@ -598,7 +566,7 @@
   function stopAll() {
     active = false;
     stopTouch();
-    if (gpuBuffer) { try { gpuBuffer.destroy(); } catch (_) {} gpuBuffer = null; }
+    if (gpuBuffer) { try { gpuBuffer.destroy(); } catch(_){} gpuBuffer = null; }
     $('stGpu').textContent = 'нет';
     $('stStatus').textContent = pattern ? 'остановлен' : 'стоп';
     $('btnStop').disabled = true;
@@ -608,15 +576,13 @@
   }
 
   $('btnStart').onclick = () => runAI().catch(e => {
-    active = false;
-    log(String(e), 'bad');
-    $('btnStart').disabled = false;
-    $('btnStop').disabled = true;
+    active = false; log(String(e), 'bad');
+    $('btnStart').disabled = false; $('btnStop').disabled = true;
   });
   $('btnStop').onclick = stopAll;
   $('btnDownload').onclick = async () => {
     if (!pattern) return;
-    const saved = await autoSaveToDisk(pattern, 'adaptive_chameleon_pattern.bin');
+    const saved = await autoSaveToDisk(pattern);
     $('stDisk').textContent = saved.method;
     log('Повторное сохранение: ' + saved.method, 'ok');
   };
