@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Pattern — Triple Gates CPU/RAM/SSD</title>
+  <title>AI Pattern — System-Wide Gates</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -17,7 +17,7 @@
       min-height:100vh;
     }
     .wrap{max-width:980px;margin:0 auto;padding:20px 14px 48px}
-    h1{font-size:1.22rem;margin:0 0 6px}
+    h1{font-size:1.2rem;margin:0 0 6px}
     .sub{color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:12px}
     .card{
       background:var(--card);border:1px solid #262c3a;border-radius:14px;
@@ -31,13 +31,13 @@
     button.secondary{background:#2a3142;color:var(--text)}
     button:disabled{opacity:.45;cursor:not-allowed}
     .grid{
-      display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));
       gap:8px;margin-top:8px
     }
     .stat{
       background:#0f131b;border:1px solid #242a36;border-radius:10px;padding:8px 10px
     }
-    .stat b{display:block;margin-top:3px;font-size:.9rem;word-break:break-all}
+    .stat b{display:block;margin-top:3px;font-size:.88rem;word-break:break-all}
     label{font-size:12px;color:var(--muted)}
     select,input[type=number]{
       width:100%;margin-top:5px;background:#0f131b;color:var(--text);
@@ -61,11 +61,11 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>AI Pattern · Triple Frequency Gates (CPU / RAM / SSD)</h1>
+    <h1>AI Pattern · System-Wide Gates</h1>
     <div class="sub">
-      Тройные масштабные «ворота»: CPU 64B · RAM 4K · SSD 64K/1MB.
-      Это структурная синхронизация данных по уровням доступа, не физическая шина между чипами.
-      + AI · live-картинка · BH calm/repair · RAM/Storage check · автосохранение · без лимита размера.
+      Масштабы: CPU 64B · RAM 4K · SSD 64K/1MB · PCIe-like 256B · NET MTU 1500 · TCP 64K · SYS 4MB.
+      Это структурное согласование данных, не управление реальными шинами и сетью.
+      AI · live · BH repair · RAM/Storage check · автосохранение · без лимита размера.
     </div>
 
     <div class="card">
@@ -102,7 +102,7 @@
     </div>
 
     <div class="card">
-      <div class="muted" style="margin-bottom:8px">Live-формирование паттерна</div>
+      <div class="muted" style="margin-bottom:8px">Live-формирование</div>
       <div class="view-wrap"><canvas id="cv" width="512" height="256"></canvas></div>
     </div>
 
@@ -118,7 +118,7 @@
         <div class="stat">CPU touch<b id="stCpu">нет</b></div>
         <div class="stat">GPU<b id="stGpu">нет</b></div>
         <div class="stat">Диск<b id="stDisk">нет</b></div>
-        <div class="stat">Gates<b id="stGates">CPU·RAM·SSD</b></div>
+        <div class="stat">Gates<b id="stGates">SYS-WIDE</b></div>
       </div>
     </div>
 
@@ -135,11 +135,15 @@
   const ctx = cv.getContext('2d', { alpha: false });
   const logEl = $('log');
 
-  // Масштабы «ворот»
-  const GATE_CPU = 64;        // cache-line
-  const GATE_RAM = 4096;      // page
-  const GATE_SSD = 65536;     // 64K block
-  const GATE_SSD_BIG = 1048576; // 1MB extent
+  // ===== масштабы system-wide gates =====
+  const G_CPU   = 64;
+  const G_RAM   = 4096;
+  const G_SSD   = 65536;
+  const G_SSD1M = 1048576;
+  const G_PCIE  = 256;
+  const G_NET   = 1500;
+  const G_TCP   = 65535;
+  const G_SYS   = 1048576 * 4;
 
   let pattern = null, bestPattern = null, bestStd = Infinity;
   let keepTimer = null, gpuDevice = null, gpuBuffer = null, active = false;
@@ -181,7 +185,7 @@
     if (dm != null) {
       if (needGB * 2 > dm) {
         report.ramOk = false;
-        report.messages.push(`RAM: мало (≈${dm} ГБ, нужно запас под ≈${needGB.toFixed(2)} ГБ)`);
+        report.messages.push(`RAM: мало (≈${dm} ГБ)`);
         $('stRamCheck').textContent = 'мало';
       } else {
         report.messages.push(`RAM: ≈${dm} ГБ — ок`);
@@ -273,32 +277,29 @@
     return { out: limited * 0.82 + prevRaw * 0.18, holeRisk, spikeRisk };
   }
 
-  // ===== ТРОЙНЫЕ ЧАСТОТНЫЕ ВОРОТА CPU / RAM / SSD =====
-  function tripleFrequencyGates(i, theta, adapt) {
-    // CPU-gate: cache-line 64B
-    const cpu = Math.sin((2 * Math.PI * i) / GATE_CPU + theta * 0.15);
+  // ===== SYSTEM-WIDE GATES =====
+  function systemWideGates(i, theta, adapt) {
+    const cpu  = Math.sin(2*Math.PI*i/G_CPU   + theta*0.15);
+    const ram  = Math.sin(2*Math.PI*i/G_RAM   + theta*0.07);
+    const ssd  = Math.sin(2*Math.PI*i/G_SSD   + theta*0.03);
+    const ssdB = Math.sin(2*Math.PI*i/G_SSD1M + theta*0.01);
+    const pcie = Math.sin(2*Math.PI*i/G_PCIE  + theta*0.11);
+    const net  = Math.sin(2*Math.PI*i/G_NET   + theta*0.05);
+    const tcp  = Math.sin(2*Math.PI*i/G_TCP   + theta*0.02);
+    const sys  = Math.sin(2*Math.PI*i/G_SYS   + theta*0.005);
 
-    // RAM-gate: page 4K
-    const ram = Math.sin((2 * Math.PI * i) / GATE_RAM + theta * 0.07);
+    const l1 = Math.sin(2*Math.PI*i/G_CPU  + 2*Math.PI*i/G_RAM);   // CPU↔RAM
+    const l2 = Math.sin(2*Math.PI*i/G_RAM  + 2*Math.PI*i/G_SSD);   // RAM↔SSD
+    const l3 = Math.sin(2*Math.PI*i/G_SSD  + 2*Math.PI*i/G_NET);   // SSD↔NET
+    const l4 = Math.sin(2*Math.PI*i/G_PCIE + 2*Math.PI*i/G_CPU);  // PCIe↔CPU
+    const l5 = Math.sin(2*Math.PI*i/G_NET  + 2*Math.PI*i/G_TCP);  // NET↔TCP
+    const l6 = Math.sin(2*Math.PI*i/G_SYS  + 2*Math.PI*i/G_RAM);  // SYS↔RAM
 
-    // SSD-gate: 64K + медленная 1MB огибающая
-    const ssd = Math.sin((2 * Math.PI * i) / GATE_SSD + theta * 0.03);
-    const ssdBig = Math.sin((2 * Math.PI * i) / GATE_SSD_BIG + theta * 0.01);
-
-    // Фазовая связка «передачи» между уровнями (структурная, не аппаратная)
-    const linkCR = Math.sin(((2 * Math.PI * i) / GATE_CPU) + ((2 * Math.PI * i) / GATE_RAM));
-    const linkRS = Math.sin(((2 * Math.PI * i) / GATE_RAM) + ((2 * Math.PI * i) / GATE_SSD));
-
-    // Веса: CPU чуть выше для touch, SSD — для устойчивости крупных блоков
-    const gate =
-      0.28 * cpu +
-      0.24 * ram +
-      0.18 * ssd +
-      0.10 * ssdBig +
-      0.12 * linkCR +
-      0.08 * linkRS;
-
-    return gate * adapt;
+    return adapt * (
+      0.14*cpu + 0.12*ram + 0.10*ssd + 0.07*ssdB +
+      0.09*pcie + 0.09*net + 0.07*tcp + 0.06*sys +
+      0.06*l1 + 0.05*l2 + 0.04*l3 + 0.04*l4 + 0.04*l5 + 0.03*l6
+    );
   }
 
   async function measureJitter(samples=1000) {
@@ -364,10 +365,10 @@
           const t128 = Math.sin((2 * PI * i) / (256 / 128));
           const t64  = Math.sin((2 * PI * i) / (256 / 64));
 
-          // Тройные ворота CPU/RAM/SSD
-          const gates = tripleFrequencyGates(i, theta, adapt);
+          // SYSTEM-WIDE GATES вместо triple
+          const gates = systemWideGates(i, theta, adapt);
 
-          const local = 0.34 * waves + 0.18 * t128 + 0.12 * t64 + 0.36 * gates;
+          const local = 0.30 * waves + 0.14 * t128 + 0.10 * t64 + 0.46 * gates;
           const coherence = Math.min(1, Math.abs(local - prev));
           const antiAttract = (1 - coherence) * (0.65 + 0.35 * jp.attractPenalty) * adapt;
           prev = local;
@@ -376,13 +377,13 @@
           const antiShunt = (0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25)) * adapt;
 
           let raw =
-            0.08 * waves +
-            0.04 * t128 +
+            0.07 * waves +
+            0.03 * t128 +
             0.03 * t64 +
-            0.18 * gates +          // вклад triple gates
-            0.13 * dissipate +
-            0.12 * antiShunt +
-            0.12 * antiAttract +
+            0.22 * gates +
+            0.12 * dissipate +
+            0.11 * antiShunt +
+            0.11 * antiAttract +
             0.06 * Math.sin(theta * (0.15 + jp.std * 3)) +
             0.05 * ((s1 & 255) / 255) +
             0.04 * ((s2 & 255) / 255);
@@ -411,16 +412,15 @@
 
   function startTouch() {
     if (keepTimer) clearInterval(keepTimer);
-    // touch с шагом, кратным cache-line / page — под CPU/RAM gates
     keepTimer = setInterval(() => {
       if (!pattern) return;
       let a = 0;
-      const step = Math.max(GATE_CPU, (pattern.length / 4096) | 0);
+      const step = Math.max(G_CPU, (pattern.length / 4096) | 0);
       for (let i = 0; i < pattern.length; i += step) a = (a + pattern[i]) & 255;
-      // явные точки на границах ворот
       a ^= pattern[0];
-      a ^= pattern[Math.min(pattern.length - 1, GATE_RAM)];
-      a ^= pattern[Math.min(pattern.length - 1, GATE_SSD)];
+      a ^= pattern[Math.min(pattern.length - 1, G_RAM)];
+      a ^= pattern[Math.min(pattern.length - 1, G_SSD)];
+      a ^= pattern[Math.min(pattern.length - 1, G_NET)];
       if (a === 999) console.log(a);
     }, 350);
     $('stCpu').textContent = 'активен';
@@ -471,9 +471,9 @@
     setProgress(0);
     ctx.fillStyle = '#000'; ctx.fillRect(0,0,cv.width,cv.height);
     $('stDisk').textContent = 'нет';
-    $('stGates').textContent = 'CPU·RAM·SSD';
+    $('stGates').textContent = 'SYS-WIDE';
 
-    log(`AI-старт: ${mb} МБ | gates 64B / 4K / 64K+1MB`);
+    log(`AI-старт: ${mb} МБ | system-wide gates ON`);
     if (mb >= 64) log('Большой размер: возможен OOM', 'warn');
 
     const pre = await checkRamAndStorage(bytes);
@@ -552,7 +552,7 @@
 
       $('stStatus').textContent = 'готов';
       $('btnDownload').disabled = false;
-      log(`Готово. σ=${bestStd.toFixed(4)} | gates CPU/RAM/SSD`, 'ok');
+      log(`Готово. σ=${bestStd.toFixed(4)} | system-wide gates`, 'ok');
     } else {
       $('stStatus').textContent = 'ошибка';
       log('Паттерн не сформирован', 'bad');
