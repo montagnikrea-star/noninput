@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Pattern + BlackHole Calm/Repair</title>
+  <title>AI Pattern Full — RAM/Storage + AutoSave + BH Repair</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -51,7 +51,7 @@
     .log{
       font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;
       white-space:pre-wrap;background:#0c0e13;border:1px solid #242a36;
-      border-radius:10px;padding:10px;min-height:130px;max-height:200px;
+      border-radius:10px;padding:10px;min-height:140px;max-height:220px;
       overflow:auto;color:#c9d1d9
     }
     .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .muted{color:var(--muted)}
@@ -61,11 +61,11 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>AI Pattern + Calm/Repair «чёрных дыр»</h1>
+    <h1>AI Pattern Full</h1>
     <div class="sub">
-      Без лимита размера в коде · AI-подстройка под минимальный джиттер · live-картинка ·
-      слой успокоения/ремонта математических провалов и пиков в структуре данных.
-      Это математика сигнала, не физический ремонт памяти.
+      RAM + Storage проверка · автосохранение на диск · AI-настройка · live-картинка ·
+      blackHoleCalmRepair · без лимита размера в коде.
+      SMART SSD из браузера недоступен — проверяется квота Storage.
     </div>
 
     <div class="card">
@@ -95,7 +95,7 @@
 
       <div class="row">
         <button id="btnStart">AI: сформировать и настроить</button>
-        <button id="btnDownload" class="secondary" disabled>Скачать .bin</button>
+        <button id="btnDownload" class="secondary" disabled>Скачать ещё раз</button>
         <button id="btnStop" class="secondary" disabled>Стоп</button>
       </div>
       <div class="bar"><i id="progress"></i></div>
@@ -115,10 +115,12 @@
         <div class="stat">σ сейчас<b id="stStd">—</b></div>
         <div class="stat">Лучший σ<b id="stBest">—</b></div>
         <div class="stat">Шаг AI<b id="stStep">—</b></div>
-        <div class="stat">RAM<b id="stRam">нет</b></div>
+        <div class="stat">RAM check<b id="stRamCheck">—</b></div>
+        <div class="stat">Storage<b id="stStorage">—</b></div>
+        <div class="stat">RAM pattern<b id="stRam">нет</b></div>
         <div class="stat">CPU touch<b id="stCpu">нет</b></div>
         <div class="stat">GPU<b id="stGpu">нет</b></div>
-        <div class="stat">BH repair<b id="stBH">включён</b></div>
+        <div class="stat">Диск<b id="stDisk">нет</b></div>
       </div>
     </div>
 
@@ -164,7 +166,7 @@
   }
   updateMemHint();
 
-  // ===== размер без верхнего лимита в коде =====
+  // ===== размер без верхнего лимита =====
   function pickSizeMb() {
     const mode = $('sizeMode').value;
     if (mode === 'custom') {
@@ -183,6 +185,90 @@
     return Math.max(1, parseInt(mode, 10) || 8);
   }
 
+  // ===== проверка RAM + Storage =====
+  async function checkRamAndStorage(needBytes) {
+    const report = { ramOk: true, storageOk: true, messages: [] };
+    const dm = navigator.deviceMemory || null;
+    const needGB = needBytes / (1024 ** 3);
+
+    if (dm != null) {
+      if (needGB * 2 > dm) {
+        report.ramOk = false;
+        report.messages.push(`RAM: маловато (≈${dm} ГБ, паттерн ≈${needGB.toFixed(2)} ГБ)`);
+        $('stRamCheck').textContent = 'мало';
+      } else {
+        report.messages.push(`RAM: deviceMemory ≈ ${dm} ГБ — ок`);
+        $('stRamCheck').textContent = dm + ' ГБ';
+      }
+    } else {
+      report.messages.push('RAM: deviceMemory недоступен');
+      $('stRamCheck').textContent = 'n/a';
+    }
+
+    try {
+      if (navigator.storage && navigator.storage.estimate) {
+        const est = await navigator.storage.estimate();
+        const quota = est.quota || 0;
+        const usage = est.usage || 0;
+        const free = Math.max(0, quota - usage);
+        report.messages.push(
+          `Storage: свободно ≈${(free / 1024 / 1024).toFixed(0)} МБ / ${(quota / 1024 / 1024).toFixed(0)} МБ`
+        );
+        $('stStorage').textContent = (free / 1024 / 1024).toFixed(0) + ' МБ free';
+        if (free < needBytes * 0.2) {
+          report.storageOk = false;
+          report.messages.push('Storage: мало квоты браузера');
+        }
+      } else {
+        report.messages.push('Storage API недоступен');
+        $('stStorage').textContent = 'n/a';
+      }
+    } catch (e) {
+      report.messages.push('Storage error: ' + e.message);
+      $('stStorage').textContent = 'ошибка';
+    }
+
+    return report;
+  }
+
+  // ===== автосохранение на диск =====
+  function autoDownloadBin(buf, filename = 'adaptive_chameleon_pattern.bin') {
+    const blob = new Blob([buf], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  async function autoSaveToDisk(buf, filename = 'adaptive_chameleon_pattern.bin') {
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await showSaveFilePicker({
+          suggestedName: filename,
+          types: [{
+            description: 'Binary pattern',
+            accept: { 'application/octet-stream': ['.bin'] }
+          }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(buf);
+        await writable.close();
+        return { method: 'file-picker', ok: true };
+      } catch (e) {
+        // отмена или ошибка → fallback download
+        autoDownloadBin(buf, filename);
+        return { method: 'download-fallback', ok: true, error: String(e.message || e) };
+      }
+    }
+    autoDownloadBin(buf, filename);
+    return { method: 'download', ok: true };
+  }
+
   // ===== визуализация =====
   function drawPattern(buf, partial = 1) {
     if (!buf || buf.length === 0) return;
@@ -190,12 +276,11 @@
     const total = w * h;
     const useLen = Math.max(1, Math.floor(buf.length * Math.max(0.01, Math.min(1, partial))));
     const data = imgData.data;
-
     for (let p = 0; p < total; p++) {
       const src = buf[((p * useLen / total) | 0) % useLen];
       const v = src;
       const o = p * 4;
-      data[o]     = Math.min(255, (v * 1.25) | 0);
+      data[o] = Math.min(255, (v * 1.25) | 0);
       data[o + 1] = Math.min(255, (v * 0.75 + 35) | 0);
       data[o + 2] = Math.min(255, ((255 - v) * 0.9 + 25) | 0);
       data[o + 3] = 255;
@@ -204,40 +289,29 @@
   }
 
   async function animateFormation(buf) {
-    const frames = 10;
-    for (let f = 1; f <= frames && active; f++) {
-      drawPattern(buf, f / frames);
+    for (let f = 1; f <= 10 && active; f++) {
+      drawPattern(buf, f / 10);
       await new Promise(r => setTimeout(r, 25));
     }
     drawPattern(buf, 1);
   }
 
-  // ===== слой «чёрных дыр»: успокоение + ремонт =====
+  // ===== black hole calm/repair =====
   function blackHoleCalmRepair(raw, prevRaw, runMean) {
     const localEnergy = Math.abs(raw);
     const holeRisk = Math.max(0, (runMean - localEnergy) / (runMean + 1e-6));
     const spikeRisk = Math.max(0, (localEnergy - runMean * 1.8) / (localEnergy + 1e-6));
-
-    // calm: сглаживаем пики
     const calm = raw * (1 - 0.35 * spikeRisk) + runMean * Math.sign(raw || 1) * 0.35 * spikeRisk;
-
-    // repair: поднимаем провалы
     const repair = calm + holeRisk * 0.45 * (runMean * Math.sign(calm || 1) - calm);
-
-    // anti-singularity: мягкая сатурация вместо «бесконечности»
     const limited = Math.tanh(repair * 1.1);
-
-    // непрерывность поля
     const smooth = limited * 0.82 + prevRaw * 0.18;
-
     return { out: smooth, holeRisk, spikeRisk };
   }
 
-  // ===== джиттер =====
-  async function measureJitter(samples = 1100) {
+  // ===== jitter =====
+  async function measureJitter(samples = 1000) {
     let t = performance.now();
-    for (let i = 0; i < 800; i++) t = performance.now();
-
+    for (let i = 0; i < 700; i++) t = performance.now();
     const deltas = new Float64Array(samples);
     let prev = performance.now();
     for (let i = 0; i < samples; i++) {
@@ -249,7 +323,6 @@
       prev = now;
       if ((i & 127) === 0) await new Promise(r => setTimeout(r, 0));
     }
-
     let sum = 0, sum2 = 0, min = Infinity, max = -Infinity;
     for (let i = 0; i < samples; i++) {
       const d = deltas[i];
@@ -259,7 +332,6 @@
     }
     const mean = sum / samples;
     const std = Math.sqrt(Math.max(0, sum2 / samples - mean * mean));
-
     const bins = 24;
     const hist = new Array(bins).fill(0);
     const span = Math.max(1e-9, max - min);
@@ -270,12 +342,10 @@
       hist[b]++;
     }
     const histNorm = hist.map(v => v / samples);
-
     let seed = (Math.floor(mean * 1e6) ^ Math.floor(std * 1e7) ^ Math.floor(max * 1e5)) >>> 0;
     seed = Math.imul(seed ^ (seed >>> 16), 0x7feb352d);
     seed = Math.imul(seed ^ (seed >>> 15), 0x846ca68b);
     seed = (seed ^ (seed >>> 16)) >>> 0;
-
     return {
       mean, std, histNorm, seed,
       chaos: Math.min(1.6, 0.3 + std * 8),
@@ -284,77 +354,54 @@
     };
   }
 
-  // ===== AI-генерация + BH layer + live draw =====
+  // ===== AI build =====
   function aiBuildPattern(bytes, jp, step, bestStdSoFar) {
     const out = new Uint8Array(bytes);
     const PHI = 1.618033988749895;
     const PI = Math.PI;
     let s1 = (0xDEADBEEF ^ jp.seed ^ (step * 0x9E3779B9)) >>> 0;
     let s2 = (0x12345679 ^ (jp.seed * 0x85EB) ^ step) >>> 0;
-    let prev = 0;
-    let prevRaw = 0;
-    let runMean = 0.15;
-
+    let prev = 0, prevRaw = 0, runMean = 0.15;
     const mix = (x) => {
       x = (x + 0x9E3779B9) >>> 0;
       x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
       x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
       return (x ^ (x >>> 16)) >>> 0;
     };
-
     const needMoreDamp = !isFinite(bestStdSoFar) || jp.std >= bestStdSoFar * 0.98;
     const adapt = 1 + Math.min(2.2, step * 0.16 + jp.std * 2.2 + (needMoreDamp ? 0.3 : 0));
-
     const base = [0.025, 0.07, 0.18, 0.5, 1.2, 3.0, 7.5, 14, 22];
-    const freq = base.map((f, i) =>
-      f * (1 + (jp.histNorm[i % jp.histNorm.length] - 1 / base.length) * jp.chaos)
-    );
-
+    const freq = base.map((f, i) => f * (1 + (jp.histNorm[i % jp.histNorm.length] - 1 / base.length) * jp.chaos));
     const block = Math.max(8192, (bytes / 40) | 0);
     let holeAcc = 0, spikeAcc = 0;
 
     return {
-      out,
       generate: async function () {
         for (let i = 0; i < bytes; i++) {
           s1 = mix(s1 + i);
           s2 = mix(s2 + Math.imul(i, 0x9E3779B9));
           const theta = (2 * PI * PHI * i) / 256;
-
           let waves = 0;
           for (let k = 0; k < freq.length; k++) {
             waves += Math.sin(theta * freq[k] + jp.histNorm[k % jp.histNorm.length] * PI);
           }
           waves /= freq.length;
-
           const t128 = Math.sin((2 * PI * i) / (256 / 128));
           const t64  = Math.sin((2 * PI * i) / (256 / 64));
           const sub  = Math.sin((2 * PI * i) / ((256 / 128) / 8));
-
           const local = 0.46 * waves + 0.28 * t128 + 0.16 * t64 + 0.10 * sub;
           const coherence = Math.min(1, Math.abs(local - prev));
           const antiAttract = (1 - coherence) * (0.65 + 0.35 * jp.attractPenalty) * adapt;
           prev = local;
-
           const dissipate = (0.5 + 0.5 * Math.sin(theta * 0.37)) * jp.damp * adapt;
           const antiShunt = (0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25)) * adapt;
-
           let raw =
-            0.09 * waves +
-            0.05 * t128 +
-            0.04 * t64 +
-            0.03 * sub +
-            0.15 * dissipate +
-            0.14 * antiShunt +
-            0.14 * antiAttract +
+            0.09 * waves + 0.05 * t128 + 0.04 * t64 + 0.03 * sub +
+            0.15 * dissipate + 0.14 * antiShunt + 0.14 * antiAttract +
             0.07 * Math.sin(theta * (0.15 + jp.std * 3)) +
-            0.05 * ((s1 & 255) / 255) +
-            0.04 * ((s2 & 255) / 255);
+            0.05 * ((s1 & 255) / 255) + 0.04 * ((s2 & 255) / 255);
 
-          // running mean для BH-слоя
           runMean = runMean * 0.995 + Math.abs(raw) * 0.005;
-
-          // Успокоение / ремонт «чёрных дыр»
           const bh = blackHoleCalmRepair(raw, prevRaw, runMean);
           prevRaw = bh.out;
           holeAcc += bh.holeRisk;
@@ -408,7 +455,6 @@
       if (!adapter) throw new Error('no adapter');
       gpuDevice = await adapter.requestDevice();
       if (gpuBuffer) { try { gpuBuffer.destroy(); } catch (_) {} gpuBuffer = null; }
-
       let size = data.byteLength;
       try {
         gpuBuffer = gpuDevice.createBuffer({
@@ -439,7 +485,7 @@
     active = true;
 
     const mb = pickSizeMb();
-    const bytes = mb * 1024 * 1024; // без верхнего лимита
+    const bytes = mb * 1024 * 1024;
     const maxSteps = Math.max(2, Math.min(30, parseInt($('maxSteps').value, 10) || 8));
 
     $('btnStart').disabled = true;
@@ -451,14 +497,20 @@
     setProgress(0);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, cv.width, cv.height);
+    $('stDisk').textContent = 'нет';
 
-    log(`AI-старт: ${mb} МБ, шагов до ${maxSteps}, BH calm/repair ON`);
+    log(`AI-старт: ${mb} МБ, шагов ${maxSteps}`);
     if (mb >= 64) log('Большой размер: возможны долгая генерация / OOM', 'warn');
+
+    // предварительная проверка RAM + Storage
+    const pre = await checkRamAndStorage(bytes);
+    pre.messages.forEach(m => log(m));
+    if (!pre.ramOk) log('Предупреждение RAM', 'warn');
+    if (!pre.storageOk) log('Предупреждение Storage', 'warn');
 
     $('stStatus').textContent = 'AI настройка...';
     $('stRam').textContent = 'нет';
     $('stGpu').textContent = 'нет';
-    $('stBH').textContent = 'включён';
 
     let noImprove = 0;
 
@@ -466,9 +518,9 @@
       $('stStep').textContent = `${step}/${maxSteps}`;
       setProgress(((step - 1) / maxSteps) * 100);
 
-      const jp = await measureJitter(1000);
+      const jp = await measureJitter(900);
       $('stStd').textContent = jp.std.toFixed(4) + ' ms';
-      log(`AI шаг ${step}: σ=${jp.std.toFixed(4)} ms`);
+      log(`AI шаг ${step}: σ=${jp.std.toFixed(4)}`);
 
       let result;
       try {
@@ -476,21 +528,20 @@
         $('stStatus').textContent = `формирование ${step}/${maxSteps}`;
         result = await job.generate();
       } catch (e) {
-        log('Ошибка генерации/OOM: ' + e.message, 'bad');
-        log('Уменьшите размер и повторите', 'warn');
+        log('OOM/ошибка: ' + e.message, 'bad');
         break;
       }
       if (!active) break;
 
       pattern = result.data;
       $('stRam').textContent = mb + ' МБ';
-      log(`  BH holeAvg=${result.holeAvg.toFixed(4)} spikeAvg=${result.spikeAvg.toFixed(4)}`);
+      log(`  BH hole=${result.holeAvg.toFixed(4)} spike=${result.spikeAvg.toFixed(4)}`);
       startTouch();
       await animateFormation(pattern);
       await uploadGpu(pattern);
 
-      await new Promise(r => setTimeout(r, 220));
-      const after = await measureJitter(900);
+      await new Promise(r => setTimeout(r, 200));
+      const after = await measureJitter(800);
       $('stStd').textContent = after.std.toFixed(4) + ' ms';
       log(`  контроль σ=${after.std.toFixed(4)}`);
 
@@ -499,7 +550,7 @@
         bestPattern = new Uint8Array(pattern);
         $('stBest').textContent = bestStd.toFixed(4) + ' ms';
         noImprove = 0;
-        log('  лучший паттерн обновлён', 'ok');
+        log('  лучший обновлён', 'ok');
         drawPattern(bestPattern, 1);
       } else {
         noImprove++;
@@ -507,7 +558,7 @@
       }
 
       if (noImprove >= 2 && step >= 3) {
-        log('AI: улучшений нет — остановка', 'warn');
+        log('AI: стоп без улучшения', 'warn');
         break;
       }
     }
@@ -519,10 +570,21 @@
       await uploadGpu(pattern);
       $('stRam').textContent = mb + ' МБ';
       $('stStd').textContent = bestStd.toFixed(4) + ' ms';
-      $('stStatus').textContent = 'готов';
+      $('stStatus').textContent = 'сохранение...';
       setProgress(100);
+
+      // финальная проверка + АВТОСОХРАНЕНИЕ НА ДИСК
+      const post = await checkRamAndStorage(pattern.byteLength);
+      post.messages.forEach(m => log(m));
+
+      log('Автосохранение паттерна на диск...', 'ok');
+      const saved = await autoSaveToDisk(pattern, 'adaptive_chameleon_pattern.bin');
+      $('stDisk').textContent = saved.method;
+      log(`Диск: ${saved.method}` + (saved.error ? ` (${saved.error})` : ''), 'ok');
+
+      $('stStatus').textContent = 'готов';
       $('btnDownload').disabled = false;
-      log(`Готово. Мин. σ=${bestStd.toFixed(4)} ms. Можно скачать.`, 'ok');
+      log(`Готово. Мин. σ=${bestStd.toFixed(4)} ms`, 'ok');
     } else {
       $('stStatus').textContent = 'ошибка';
       log('Паттерн не сформирован', 'bad');
@@ -552,14 +614,11 @@
     $('btnStop').disabled = true;
   });
   $('btnStop').onclick = stopAll;
-  $('btnDownload').onclick = () => {
+  $('btnDownload').onclick = async () => {
     if (!pattern) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([pattern], { type: 'application/octet-stream' }));
-    a.download = 'adaptive_chameleon_pattern.bin';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    log('Скачивание adaptive_chameleon_pattern.bin', 'ok');
+    const saved = await autoSaveToDisk(pattern, 'adaptive_chameleon_pattern.bin');
+    $('stDisk').textContent = saved.method;
+    log('Повторное сохранение: ' + saved.method, 'ok');
   };
 
   ctx.fillStyle = '#000';
