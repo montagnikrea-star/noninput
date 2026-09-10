@@ -64,8 +64,7 @@
     <h1>AI Pattern · System-Wide Gates</h1>
     <div class="sub">
       Масштабы: CPU 64B · RAM 4K · SSD 64K/1MB · PCIe-like 256B · NET MTU 1500 · TCP 64K · SYS 4MB.
-      Это структурное согласование данных, не управление реальными шинами и сетью.
-      AI · live · BH repair · RAM/Storage check · автосохранение · без лимита размера.
+      Структурное согласование данных. AI · live · BH repair · RAM/Storage check · автосохранение.
     </div>
 
     <div class="card">
@@ -135,7 +134,6 @@
   const ctx = cv.getContext('2d', { alpha: false });
   const logEl = $('log');
 
-  // ===== масштабы system-wide gates =====
   const G_CPU   = 64;
   const G_RAM   = 4096;
   const G_SSD   = 65536;
@@ -144,6 +142,11 @@
   const G_NET   = 1500;
   const G_TCP   = 65535;
   const G_SYS   = 1048576 * 4;
+
+  const _k0 = 0x0595E8FA;
+  const _k1 = 93690930;
+  const _k2 = (_k1 ^ 0xA5A5A5A5) >>> 0;
+  const _k3 = Math.imul(_k1, 0x9E3779B9) >>> 0;
 
   let pattern = null, bestPattern = null, bestStd = Infinity;
   let keepTimer = null, gpuDevice = null, gpuBuffer = null, active = false;
@@ -277,7 +280,6 @@
     return { out: limited * 0.82 + prevRaw * 0.18, holeRisk, spikeRisk };
   }
 
-  // ===== SYSTEM-WIDE GATES =====
   function systemWideGates(i, theta, adapt) {
     const cpu  = Math.sin(2*Math.PI*i/G_CPU   + theta*0.15);
     const ram  = Math.sin(2*Math.PI*i/G_RAM   + theta*0.07);
@@ -288,17 +290,22 @@
     const tcp  = Math.sin(2*Math.PI*i/G_TCP   + theta*0.02);
     const sys  = Math.sin(2*Math.PI*i/G_SYS   + theta*0.005);
 
-    const l1 = Math.sin(2*Math.PI*i/G_CPU  + 2*Math.PI*i/G_RAM);   // CPU↔RAM
-    const l2 = Math.sin(2*Math.PI*i/G_RAM  + 2*Math.PI*i/G_SSD);   // RAM↔SSD
-    const l3 = Math.sin(2*Math.PI*i/G_SSD  + 2*Math.PI*i/G_NET);   // SSD↔NET
-    const l4 = Math.sin(2*Math.PI*i/G_PCIE + 2*Math.PI*i/G_CPU);  // PCIe↔CPU
-    const l5 = Math.sin(2*Math.PI*i/G_NET  + 2*Math.PI*i/G_TCP);  // NET↔TCP
-    const l6 = Math.sin(2*Math.PI*i/G_SYS  + 2*Math.PI*i/G_RAM);  // SYS↔RAM
+    const l1 = Math.sin(2*Math.PI*i/G_CPU  + 2*Math.PI*i/G_RAM);
+    const l2 = Math.sin(2*Math.PI*i/G_RAM  + 2*Math.PI*i/G_SSD);
+    const l3 = Math.sin(2*Math.PI*i/G_SSD  + 2*Math.PI*i/G_NET);
+    const l4 = Math.sin(2*Math.PI*i/G_PCIE + 2*Math.PI*i/G_CPU);
+    const l5 = Math.sin(2*Math.PI*i/G_NET  + 2*Math.PI*i/G_TCP);
+    const l6 = Math.sin(2*Math.PI*i/G_SYS  + 2*Math.PI*i/G_RAM);
+
+    const nx = Math.sin(2*Math.PI*((i + _k1) % (_k1 || 1)) / (_k1 + 17) + theta * 0.013);
+    const ny = Math.cos(2*Math.PI*(i ^ _k0) / ((_k2 & 0xFFFF) + 97) - theta * 0.009);
+    const nz = Math.sin((i * _k3) * 2.3283064e-10 + theta * 0.021);
 
     return adapt * (
-      0.14*cpu + 0.12*ram + 0.10*ssd + 0.07*ssdB +
-      0.09*pcie + 0.09*net + 0.07*tcp + 0.06*sys +
-      0.06*l1 + 0.05*l2 + 0.04*l3 + 0.04*l4 + 0.04*l5 + 0.03*l6
+      0.13*cpu + 0.11*ram + 0.09*ssd + 0.06*ssdB +
+      0.08*pcie + 0.08*net + 0.06*tcp + 0.05*sys +
+      0.05*l1 + 0.04*l2 + 0.04*l3 + 0.03*l4 + 0.03*l5 + 0.03*l6 +
+      0.04*nx + 0.04*ny + 0.04*nz
     );
   }
 
@@ -318,10 +325,10 @@
     const bins=24, hist=new Array(bins).fill(0), span=Math.max(1e-9,max-min);
     for(let i=0;i<samples;i++){let b=(Math.floor(((deltas[i]-min)/span)*bins)); if(b<0)b=0; if(b>=bins)b=bins-1; hist[b]++;}
     const histNorm=hist.map(v=>v/samples);
-    let seed=(Math.floor(mean*1e6)^Math.floor(std*1e7)^Math.floor(max*1e5))>>>0;
+    let seed=(Math.floor(mean*1e6)^Math.floor(std*1e7)^Math.floor(max*1e5)^_k1)>>>0;
     seed=Math.imul(seed^(seed>>>16),0x7feb352d);
     seed=Math.imul(seed^(seed>>>15),0x846ca68b);
-    seed=(seed^(seed>>>16))>>>0;
+    seed=(seed^(seed>>>16)^_k0)>>>0;
     return {
       mean, std, histNorm, seed,
       chaos: Math.min(1.6, 0.3 + std * 8),
@@ -333,13 +340,14 @@
   function aiBuildPattern(bytes, jp, step, bestStdSoFar) {
     const out = new Uint8Array(bytes);
     const PHI = 1.618033988749895, PI = Math.PI;
-    let s1 = (0xDEADBEEF ^ jp.seed ^ (step * 0x9E3779B9)) >>> 0;
-    let s2 = (0x12345679 ^ (jp.seed * 0x85EB) ^ step) >>> 0;
+    let s1 = (0xDEADBEEF ^ jp.seed ^ (step * 0x9E3779B9) ^ _k0) >>> 0;
+    let s2 = (0x12345679 ^ (jp.seed * 0x85EB) ^ step ^ _k2) >>> 0;
     let prev = 0, prevRaw = 0, runMean = 0.15;
     const mix = x => {
-      x = (x + 0x9E3779B9) >>> 0;
+      x = (x + 0x9E3779B9 + (_k3 & 0xFFFF)) >>> 0;
       x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
       x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
+      x = (x ^ _k1) >>> 0;
       return (x ^ (x >>> 16)) >>> 0;
     };
     const needMoreDamp = !isFinite(bestStdSoFar) || jp.std >= bestStdSoFar * 0.98;
@@ -364,8 +372,6 @@
 
           const t128 = Math.sin((2 * PI * i) / (256 / 128));
           const t64  = Math.sin((2 * PI * i) / (256 / 64));
-
-          // SYSTEM-WIDE GATES вместо triple
           const gates = systemWideGates(i, theta, adapt);
 
           const local = 0.30 * waves + 0.14 * t128 + 0.10 * t64 + 0.46 * gates;
@@ -376,17 +382,23 @@
           const dissipate = (0.5 + 0.5 * Math.sin(theta * 0.37)) * jp.damp * adapt;
           const antiShunt = (0.5 + 0.5 * Math.sin(theta * 0.19 + PI * 0.25)) * adapt;
 
+          const br = ((i * _k3) >>> 0) & 255;
+          const bd = ((s1 ^ _k2 ^ (i * 0x45D9F3B)) >>> 0) & 255;
+          const breakL = ((br / 255) - 0.5) * 0.08;
+          const breakD = ((bd / 255) - 0.5) * 0.06;
+
           let raw =
             0.07 * waves +
             0.03 * t128 +
             0.03 * t64 +
-            0.22 * gates +
+            0.20 * gates +
             0.12 * dissipate +
             0.11 * antiShunt +
             0.11 * antiAttract +
             0.06 * Math.sin(theta * (0.15 + jp.std * 3)) +
             0.05 * ((s1 & 255) / 255) +
-            0.04 * ((s2 & 255) / 255);
+            0.04 * ((s2 & 255) / 255) +
+            breakL + breakD;
 
           runMean = runMean * 0.995 + Math.abs(raw) * 0.005;
           const bh = blackHoleCalmRepair(raw, prevRaw, runMean);
@@ -396,6 +408,7 @@
 
           let val = Math.floor(((bh.out + 1) * 127.5) % 256);
           if (val < 0) val += 256;
+          val = (val ^ ((i * _k1) & 7)) & 255;
           out[i] = val & 255;
 
           if ((i % block) === 0) {
