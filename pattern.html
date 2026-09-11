@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Pattern — Ultra-Wide · GPU · Gates · Lattice</title>
+  <title>Smart Pattern — Ultra-Wide · GPU · USB Flash</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -61,11 +61,10 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Smart Pattern · Ultra-Wide Spectrum · GPU</h1>
+    <h1>Smart Pattern · Ultra-Wide · GPU · USB Flash</h1>
     <div class="sub">
-      Многомерный лог-спектр (модель) + multi-scale gates + interference lattice.
-      Умный поиск по джиттеру, WebGPU/CPU, стоп без улучшений, автоскачивание.
-      Широкий спектр — математическая модель данных, не физический охват света/эфира.
+      Умный поиск · WebGPU/CPU · multi-scale gates · interference lattice · ultra-wide spectrum.
+      «Скачать для USB» — flash-aligned образ (page/block), не low-level format флешки.
     </div>
 
     <div class="card">
@@ -88,11 +87,27 @@
           <label>Стоп без улучшения</label>
           <input id="patience" type="number" min="1" max="10" value="2" />
         </div>
+        <div>
+          <label>USB page</label>
+          <select id="flashPage">
+            <option value="4096" selected>4K</option>
+            <option value="16384">16K</option>
+          </select>
+        </div>
+        <div>
+          <label>USB erase-block</label>
+          <select id="flashBlock">
+            <option value="131072" selected>128K</option>
+            <option value="262144">256K</option>
+            <option value="524288">512K</option>
+          </select>
+        </div>
       </div>
       <div class="row">
         <button id="btnStart">Умный поиск</button>
         <button id="btnStop" class="secondary" disabled>Стоп</button>
-        <button id="btnDownload" class="secondary" disabled>Скачать ещё раз</button>
+        <button id="btnDownload" class="secondary" disabled>Скачать .bin</button>
+        <button id="btnFlash" class="secondary" disabled>Скачать для USB</button>
       </div>
       <div class="bar"><i id="progress"></i></div>
     </div>
@@ -212,11 +227,9 @@
     };
   }
 
-  // Многомерный лог-спектр (математическая модель сверхширокого диапазона)
   function ultraWideSpectrum(i, adapt) {
     const N = 24;
-    const fMin = 1e-6;
-    const fMax = 1e18;
+    const fMin = 1e-6, fMax = 1e18;
     let re = 0, im = 0;
     const x = i * 0.001;
     const y = Math.sin(i * 0.00017) * 1000;
@@ -224,17 +237,12 @@
     for (let k = 0; k < N; k++) {
       const t = k / (N - 1);
       const f = fMin * Math.pow(fMax / fMin, t);
-      const phase =
-        f * 1e-12 * x +
-        f * 1e-15 * y +
-        f * 1e-18 * z +
-        k * 0.37;
+      const phase = f * 1e-12 * x + f * 1e-15 * y + f * 1e-18 * z + k * 0.37;
       const a = 1 / (1 + k * 0.08);
       re += a * Math.cos(phase);
       im += a * Math.sin(phase);
     }
-    const n = Math.sqrt(re * re + im * im) / N;
-    return Math.tanh(n * 2) * adapt;
+    return Math.tanh(Math.sqrt(re * re + im * im) / N * 2) * adapt;
   }
 
   function generateCPU(bytes, seed, adapt, step){
@@ -275,7 +283,6 @@
     return out;
   }
 
-  // GPU: gates + lattice + ultra-wide log spectrum (укороченная N для скорости)
   const SHADER=`
     struct Params { seed:u32, adapt_bits:u32, step:u32, size:u32, };
     @group(0) @binding(0) var<storage, read_write> outBuf: array<u32>;
@@ -317,7 +324,6 @@
       let lattice=tanh((re0*0.6+im0*0.4)*0.5);
       let ifx=lattice*0.55*adapt-suppress*0.35*adapt-dampv*0.25*adapt;
 
-      // ultra-wide log spectrum (12 мод на GPU)
       var re=0.0; var im=0.0;
       let x=fi*0.001;
       let y=sin(fi*0.00017)*1000.0;
@@ -419,11 +425,48 @@
 
   const scoreOf=std=>1000/(1+std*100);
 
-  function downloadBin(buf){
+  function downloadBin(buf, name='adaptive_chameleon_pattern.bin'){
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([buf],{type:'application/octet-stream'}));
-    a.download='adaptive_chameleon_pattern.bin';
+    a.download=name;
     a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  // Flash-aligned образ для копирования на USB (не low-level format)
+  function buildFlashFriendlyImage(patternBytes, opts = {}) {
+    const page = opts.page || 4096;
+    const block = opts.block || 131072;
+    const magic = new TextEncoder().encode('ACPFLASH1');
+    const header = new Uint8Array(64);
+    header.set(magic, 0);
+    const dv = new DataView(header.buffer);
+    dv.setUint32(8, page, true);
+    dv.setUint32(12, block, true);
+    dv.setUint32(16, patternBytes.length, true);
+    dv.setUint32(20, 1, true);
+
+    const rawLen = 64 + patternBytes.length;
+    const total = Math.ceil(rawLen / block) * block;
+    const out = new Uint8Array(total);
+    out.set(header, 0);
+    out.set(patternBytes, 64);
+    for (let i = rawLen; i < total; i++) {
+      out[i] = (patternBytes[(i - 64) % patternBytes.length] ^ 0xA5) & 255;
+    }
+    return out;
+  }
+
+  function downloadFlash(patternBytes) {
+    const page = parseInt($('flashPage').value, 10) || 4096;
+    const block = parseInt($('flashBlock').value, 10) || 131072;
+    const img = buildFlashFriendlyImage(patternBytes, { page, block });
+    downloadBin(img, 'pattern_usb_flash.bin');
+    log(`USB-образ: page=${page}, block=${block}, size=${(img.length/1024).toFixed(0)} КБ`, 'ok');
+  }
+
+  function enableDownloads(on) {
+    $('btnDownload').disabled = !on;
+    $('btnFlash').disabled = !on;
   }
 
   async function runSmart(){
@@ -431,7 +474,7 @@
     active=true;
     $('btnStart').disabled=true;
     $('btnStop').disabled=false;
-    $('btnDownload').disabled=true;
+    enableDownloads(false);
     bestStd=Infinity; bestScore=-Infinity; bestPattern=null; pattern=null;
     setProgress(0);
     await initGPU();
@@ -496,7 +539,7 @@
       downloadBin(pattern);
       log('Автоскачивание adaptive_chameleon_pattern.bin','ok');
       $('stStatus').textContent='готов';
-      $('btnDownload').disabled=false;
+      enableDownloads(true);
     }else{
       $('stStatus').textContent='ошибка';
       log('Нет результата','bad');
@@ -512,7 +555,7 @@
     $('stStatus').textContent=pattern?'остановлен':'стоп';
     $('btnStart').disabled=false;
     $('btnStop').disabled=true;
-    if(pattern) $('btnDownload').disabled=false;
+    if(pattern) enableDownloads(true);
     log('Стоп');
   }
 
@@ -524,7 +567,11 @@
   $('btnDownload').onclick=()=>{
     if(!pattern) return;
     downloadBin(pattern);
-    log('Повторное скачивание','ok');
+    log('Повторное скачивание .bin','ok');
+  };
+  $('btnFlash').onclick=()=>{
+    if(!pattern) return;
+    downloadFlash(pattern);
   };
 
   ctx.fillStyle='#000';
