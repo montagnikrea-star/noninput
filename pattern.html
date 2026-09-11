@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Pattern — BIN · USB · Arduino</title>
+  <title>Smart Pattern — BIN · USB · Arduino Cap-Model</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -63,8 +63,9 @@
   <div class="wrap">
     <h1>Smart Pattern · BIN · USB · Arduino</h1>
     <div class="sub">
-      Умный поиск по джиттеру (GPU/CPU). Скачивание: обычный .bin, flash-aligned для USB,
-      динамический скетч Arduino (.ino). Математическая модель данных — не управление железом флеш/MCU.
+      Умный поиск (GPU/CPU). .bin и USB — после паттерна.
+      Arduino .ino (динамический cap-model) можно скачать всегда.
+      Модель данных, не RF-антенна из SRAM.
     </div>
 
     <div class="card">
@@ -95,13 +96,13 @@
       <div class="row">
         <button id="btnBin" class="secondary" disabled>Скачать .bin</button>
         <button id="btnUsb" class="secondary" disabled>Скачать USB (flash-aligned)</button>
-        <button id="btnArduino" class="secondary" disabled>Скачать Arduino .ino</button>
+        <button id="btnArduino" class="secondary">Скачать Arduino .ino</button>
       </div>
       <div class="bar"><i id="progress"></i></div>
     </div>
 
     <div class="card">
-      <div class="muted" style="margin-bottom:8px;color:var(--muted);font-size:12px">Паттерн</div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Паттерн</div>
       <div class="view-wrap"><canvas id="cv" width="512" height="256"></canvas></div>
     </div>
 
@@ -117,7 +118,7 @@
     </div>
 
     <div class="card">
-      <div class="muted" style="margin-bottom:6px;color:var(--muted);font-size:12px">Лог</div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:6px">Лог</div>
       <div class="log" id="log"></div>
     </div>
   </div>
@@ -137,136 +138,153 @@
   let bestStd=Infinity, bestScore=-Infinity;
   let gpuDevice=null, gpuPipeline=null, gpuReady=false;
 
-  const log=(m,c='')=>{
-    const d=document.createElement('div');
-    if(c) d.className=c;
-    d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;
-    logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight;
+  const log = (m, c='') => {
+    const d = document.createElement('div');
+    if (c) d.className = c;
+    d.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
   };
-  const setProgress=p=>{ $('progress').style.width=Math.max(0,Math.min(100,p))+'%'; };
+  const setProgress = p => { $('progress').style.width = Math.max(0, Math.min(100, p)) + '%'; };
 
-  function enableDownloads(on){
+  function enablePatternDownloads(on) {
     $('btnBin').disabled = !on;
     $('btnUsb').disabled = !on;
-    $('btnArduino').disabled = !on;
+    // Arduino не трогаем — всегда доступен
   }
 
-  function draw(buf){
-    if(!buf?.length) return;
-    const w=cv.width,h=cv.height,total=w*h,len=buf.length,data=imgData.data;
-    for(let p=0;p<total;p++){
-      const v=buf[((p*len/total)|0)%len];
-      const o=p*4;
-      data[o]=Math.min(255,(v*1.25)|0);
-      data[o+1]=Math.min(255,(v*0.75+35)|0);
-      data[o+2]=Math.min(255,((255-v)*0.9+25)|0);
-      data[o+3]=255;
+  function draw(buf) {
+    if (!buf || !buf.length) return;
+    const w = cv.width, h = cv.height, total = w * h, len = buf.length;
+    const data = imgData.data;
+    for (let p = 0; p < total; p++) {
+      const v = buf[((p * len / total) | 0) % len];
+      const o = p * 4;
+      data[o] = Math.min(255, (v * 1.25) | 0);
+      data[o + 1] = Math.min(255, (v * 0.75 + 35) | 0);
+      data[o + 2] = Math.min(255, ((255 - v) * 0.9 + 25) | 0);
+      data[o + 3] = 255;
     }
-    ctx.putImageData(imgData,0,0);
+    ctx.putImageData(imgData, 0, 0);
   }
 
-  async function measureJitter(samples=900){
-    let t=performance.now(); for(let i=0;i<500;i++) t=performance.now();
-    const d=new Float64Array(samples); let prev=performance.now();
-    for(let i=0;i<samples;i++){
-      let x=i; x=Math.imul(x^(x<<13),0x5bd1e995); x^=x>>>15;
-      const n=performance.now(); d[i]=n-prev; prev=n;
-      if((i&127)===0) await new Promise(r=>setTimeout(r,0));
+  async function measureJitter(samples = 900) {
+    let t = performance.now();
+    for (let i = 0; i < 500; i++) t = performance.now();
+    const d = new Float64Array(samples);
+    let prev = performance.now();
+    for (let i = 0; i < samples; i++) {
+      let x = i;
+      x = Math.imul(x ^ (x << 13), 0x5bd1e995);
+      x ^= x >>> 15;
+      const n = performance.now();
+      d[i] = n - prev;
+      prev = n;
+      if ((i & 127) === 0) await new Promise(r => setTimeout(r, 0));
     }
-    let sum=0,sum2=0;
-    for(let i=0;i<samples;i++){sum+=d[i];sum2+=d[i]*d[i];}
-    const mean=sum/samples, std=Math.sqrt(Math.max(0,sum2/samples-mean*mean));
-    let seed=(Math.floor(mean*1e6)^Math.floor(std*1e7))>>>0;
-    seed=Math.imul(seed^(seed>>>16),0x7feb352d)>>>0;
-    return {mean,std,seed};
+    let sum = 0, sum2 = 0;
+    for (let i = 0; i < samples; i++) { sum += d[i]; sum2 += d[i] * d[i]; }
+    const mean = sum / samples;
+    const std = Math.sqrt(Math.max(0, sum2 / samples - mean * mean));
+    let seed = (Math.floor(mean * 1e6) ^ Math.floor(std * 1e7)) >>> 0;
+    seed = Math.imul(seed ^ (seed >>> 16), 0x7feb352d) >>> 0;
+    return { mean, std, seed };
   }
 
-  function systemWideGates(i, theta, adapt){
-    const cpu=Math.sin(2*Math.PI*i/G_CPU+theta*0.15);
-    const ram=Math.sin(2*Math.PI*i/G_RAM+theta*0.07);
-    const ssd=Math.sin(2*Math.PI*i/G_SSD+theta*0.03);
-    const ssdB=Math.sin(2*Math.PI*i/G_SSD1M+theta*0.01);
-    const pcie=Math.sin(2*Math.PI*i/G_PCIE+theta*0.11);
-    const net=Math.sin(2*Math.PI*i/G_NET+theta*0.05);
-    const tcp=Math.sin(2*Math.PI*i/G_TCP+theta*0.02);
-    const sys=Math.sin(2*Math.PI*i/G_SYS+theta*0.005);
-    const l1=Math.sin(2*Math.PI*i/G_CPU+2*Math.PI*i/G_RAM);
-    const l2=Math.sin(2*Math.PI*i/G_RAM+2*Math.PI*i/G_SSD);
-    return adapt*(
-      0.11*cpu+0.09*ram+0.07*ssd+0.04*ssdB+
-      0.06*pcie+0.06*net+0.04*tcp+0.04*sys+
-      0.04*l1+0.03*l2
+  function systemWideGates(i, theta, adapt) {
+    const cpu = Math.sin(2 * Math.PI * i / G_CPU + theta * 0.15);
+    const ram = Math.sin(2 * Math.PI * i / G_RAM + theta * 0.07);
+    const ssd = Math.sin(2 * Math.PI * i / G_SSD + theta * 0.03);
+    const ssdB = Math.sin(2 * Math.PI * i / G_SSD1M + theta * 0.01);
+    const pcie = Math.sin(2 * Math.PI * i / G_PCIE + theta * 0.11);
+    const net = Math.sin(2 * Math.PI * i / G_NET + theta * 0.05);
+    const tcp = Math.sin(2 * Math.PI * i / G_TCP + theta * 0.02);
+    const sys = Math.sin(2 * Math.PI * i / G_SYS + theta * 0.005);
+    const l1 = Math.sin(2 * Math.PI * i / G_CPU + 2 * Math.PI * i / G_RAM);
+    const l2 = Math.sin(2 * Math.PI * i / G_RAM + 2 * Math.PI * i / G_SSD);
+    return adapt * (
+      0.11 * cpu + 0.09 * ram + 0.07 * ssd + 0.04 * ssdB +
+      0.06 * pcie + 0.06 * net + 0.04 * tcp + 0.04 * sys +
+      0.04 * l1 + 0.03 * l2
     );
   }
 
-  function interferenceLattice(i, theta, adapt){
-    const sources=[
-      {a:1.00,w:0.07,p:0.00},{a:0.85,w:0.19,p:1.17},{a:0.70,w:0.41,p:2.09},
-      {a:0.55,w:0.93,p:0.61},{a:0.40,w:1.70,p:2.70}
+  function interferenceLattice(i, theta, adapt) {
+    const sources = [
+      { a: 1, w: 0.07, p: 0 }, { a: 0.85, w: 0.19, p: 1.17 }, { a: 0.7, w: 0.41, p: 2.09 },
+      { a: 0.55, w: 0.93, p: 0.61 }, { a: 0.4, w: 1.7, p: 2.7 }
     ];
-    let re=0,im=0;
-    for(let k=0;k<sources.length;k++){
-      const s=sources[k];
-      const phase=s.w*theta+s.p+i*(0.002+k*0.0007);
-      re+=s.a*Math.cos(phase); im+=s.a*Math.sin(phase);
+    let re = 0, im = 0;
+    for (let k = 0; k < sources.length; k++) {
+      const s = sources[k];
+      const phase = s.w * theta + s.p + i * (0.002 + k * 0.0007);
+      re += s.a * Math.cos(phase);
+      im += s.a * Math.sin(phase);
     }
-    const In=(re*re+im*im)/(sources.length*sources.length);
-    const suppress=Math.max(0,0.55-In);
-    const damp=Math.max(0,In-0.45);
-    const lattice=Math.tanh((re*0.6+im*0.4)*0.8);
-    return { out: lattice*0.55*adapt - suppress*0.35*adapt - damp*0.25*adapt, suppress, damp };
-  }
-
-  function ultraWideSpectrum(i, adapt){
-    const N=24, fMin=1e-6, fMax=1e18;
-    let re=0, im=0;
-    const x=i*0.001, y=Math.sin(i*0.00017)*1000, z=Math.cos(i*0.00031)*1000;
-    for(let k=0;k<N;k++){
-      const t=k/(N-1);
-      const f=fMin*Math.pow(fMax/fMin,t);
-      const phase=f*1e-12*x + f*1e-15*y + f*1e-18*z + k*0.37;
-      const a=1/(1+k*0.08);
-      re+=a*Math.cos(phase); im+=a*Math.sin(phase);
-    }
-    return Math.tanh(Math.sqrt(re*re+im*im)/N*2)*adapt;
-  }
-
-  function generateCPU(bytes, seed, adapt, step){
-    const out=new Uint8Array(bytes);
-    let s1=(0xDEADBEEF^seed^(step*0x9E3779B9))>>>0;
-    let s2=(0x12345679^seed^step)>>>0;
-    const mix=x=>{
-      x=(x+0x9E3779B9)>>>0;
-      x=Math.imul(x^(x>>>16),0x85EBCA6B)>>>0;
-      x=Math.imul(x^(x>>>13),0xC2B2AE35)>>>0;
-      return (x^(x>>>16))>>>0;
+    const In = (re * re + im * im) / (sources.length * sources.length);
+    const suppress = Math.max(0, 0.55 - In);
+    const damp = Math.max(0, In - 0.45);
+    const lattice = Math.tanh((re * 0.6 + im * 0.4) * 0.8);
+    return {
+      out: lattice * 0.55 * adapt - suppress * 0.35 * adapt - damp * 0.25 * adapt,
+      suppress, damp
     };
-    const PHI=1.618033988749895, PI=Math.PI;
-    let prevRaw=0, runMean=0.15;
-    for(let i=0;i<bytes;i++){
-      s1=mix(s1+i); s2=mix(s2+Math.imul(i,0x9E3779B9));
-      const theta=(2*PI*PHI*i)/256+step*0.01;
-      const gates=systemWideGates(i,theta,adapt);
-      const ifx=interferenceLattice(i,theta,adapt);
-      const uws=ultraWideSpectrum(i,adapt);
-      let raw=0.09*gates+0.10*ifx.out+0.11*uws+0.04*((s1&255)/255)+0.03*((s2&255)/255);
-      raw*=(1-0.16*ifx.suppress);
-      raw=raw*(1-0.11*ifx.damp)+runMean*Math.sign(raw||1)*0.11*ifx.damp;
-      raw=Math.tanh(raw);
-      runMean=runMean*0.995+Math.abs(raw)*0.005;
-      const hole=Math.max(0,(runMean-Math.abs(raw))/(runMean+1e-6));
-      const spike=Math.max(0,(Math.abs(raw)-runMean*1.8)/(Math.abs(raw)+1e-6));
-      let v=raw*(1-0.3*spike)+runMean*Math.sign(raw||1)*0.3*spike;
-      v=v+hole*0.4*(runMean*Math.sign(v||1)-v);
-      v=Math.tanh(v)*0.82+prevRaw*0.18;
-      prevRaw=v;
-      let b=Math.floor(((v+1)*127.5)%256); if(b<0)b+=256;
-      out[i]=b&255;
+  }
+
+  function ultraWideSpectrum(i, adapt) {
+    const N = 24, fMin = 1e-6, fMax = 1e18;
+    let re = 0, im = 0;
+    const x = i * 0.001, y = Math.sin(i * 0.00017) * 1000, z = Math.cos(i * 0.00031) * 1000;
+    for (let k = 0; k < N; k++) {
+      const t = k / (N - 1);
+      const f = fMin * Math.pow(fMax / fMin, t);
+      const phase = f * 1e-12 * x + f * 1e-15 * y + f * 1e-18 * z + k * 0.37;
+      const a = 1 / (1 + k * 0.08);
+      re += a * Math.cos(phase);
+      im += a * Math.sin(phase);
+    }
+    return Math.tanh(Math.sqrt(re * re + im * im) / N * 2) * adapt;
+  }
+
+  function generateCPU(bytes, seed, adapt, step) {
+    const out = new Uint8Array(bytes);
+    let s1 = (0xDEADBEEF ^ seed ^ (step * 0x9E3779B9)) >>> 0;
+    let s2 = (0x12345679 ^ seed ^ step) >>> 0;
+    const mix = x => {
+      x = (x + 0x9E3779B9) >>> 0;
+      x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
+      x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
+      return (x ^ (x >>> 16)) >>> 0;
+    };
+    const PHI = 1.618033988749895, PI = Math.PI;
+    let prevRaw = 0, runMean = 0.15;
+    for (let i = 0; i < bytes; i++) {
+      s1 = mix(s1 + i);
+      s2 = mix(s2 + Math.imul(i, 0x9E3779B9));
+      const theta = (2 * PI * PHI * i) / 256 + step * 0.01;
+      const gates = systemWideGates(i, theta, adapt);
+      const ifx = interferenceLattice(i, theta, adapt);
+      const uws = ultraWideSpectrum(i, adapt);
+      let raw = 0.09 * gates + 0.10 * ifx.out + 0.11 * uws +
+        0.04 * ((s1 & 255) / 255) + 0.03 * ((s2 & 255) / 255);
+      raw *= (1 - 0.16 * ifx.suppress);
+      raw = raw * (1 - 0.11 * ifx.damp) + runMean * Math.sign(raw || 1) * 0.11 * ifx.damp;
+      raw = Math.tanh(raw);
+      runMean = runMean * 0.995 + Math.abs(raw) * 0.005;
+      const hole = Math.max(0, (runMean - Math.abs(raw)) / (runMean + 1e-6));
+      const spike = Math.max(0, (Math.abs(raw) - runMean * 1.8) / (Math.abs(raw) + 1e-6));
+      let v = raw * (1 - 0.3 * spike) + runMean * Math.sign(raw || 1) * 0.3 * spike;
+      v = v + hole * 0.4 * (runMean * Math.sign(v || 1) - v);
+      v = Math.tanh(v) * 0.82 + prevRaw * 0.18;
+      prevRaw = v;
+      let b = Math.floor(((v + 1) * 127.5) % 256);
+      if (b < 0) b += 256;
+      out[i] = b & 255;
     }
     return out;
   }
 
-  const SHADER=`
+  const SHADER = `
     struct Params { seed:u32, adapt_bits:u32, step:u32, size:u32, };
     @group(0) @binding(0) var<storage, read_write> outBuf: array<u32>;
     @group(0) @binding(1) var<uniform> params: Params;
@@ -310,94 +328,139 @@
     }
   `;
 
-  async function initGPU(){
-    if(!('gpu' in navigator)){ $('stBackend').textContent='CPU'; log('WebGPU нет — CPU','warn'); return false; }
-    try{
-      const adapter=await navigator.gpu.requestAdapter();
-      if(!adapter) throw new Error('no adapter');
-      gpuDevice=await adapter.requestDevice();
-      const module=gpuDevice.createShaderModule({code:SHADER});
-      gpuPipeline=gpuDevice.createComputePipeline({layout:'auto', compute:{module, entryPoint:'main'}});
-      gpuReady=true; $('stBackend').textContent='WebGPU'; log('WebGPU готов','ok'); return true;
-    }catch(e){
-      gpuReady=false; $('stBackend').textContent='CPU'; log('GPU: '+e.message+' → CPU','warn'); return false;
+  async function initGPU() {
+    if (!('gpu' in navigator)) {
+      $('stBackend').textContent = 'CPU';
+      log('WebGPU нет — CPU', 'warn');
+      return false;
+    }
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) throw new Error('no adapter');
+      gpuDevice = await adapter.requestDevice();
+      const module = gpuDevice.createShaderModule({ code: SHADER });
+      gpuPipeline = gpuDevice.createComputePipeline({
+        layout: 'auto',
+        compute: { module, entryPoint: 'main' }
+      });
+      gpuReady = true;
+      $('stBackend').textContent = 'WebGPU';
+      log('WebGPU готов', 'ok');
+      return true;
+    } catch (e) {
+      gpuReady = false;
+      $('stBackend').textContent = 'CPU';
+      log('GPU: ' + e.message + ' → CPU', 'warn');
+      return false;
     }
   }
 
-  async function generateGPU(bytes, seed, adapt, step){
-    const outBuffer=gpuDevice.createBuffer({size:bytes*4, usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
-    const paramData=new ArrayBuffer(16); const dv=new DataView(paramData);
-    dv.setUint32(0,seed>>>0,true);
-    dv.setUint32(4,new Uint32Array(new Float32Array([adapt]).buffer)[0],true);
-    dv.setUint32(8,step>>>0,true); dv.setUint32(12,bytes>>>0,true);
-    const paramBuffer=gpuDevice.createBuffer({size:16, usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-    gpuDevice.queue.writeBuffer(paramBuffer,0,paramData);
-    const bindGroup=gpuDevice.createBindGroup({
-      layout:gpuPipeline.getBindGroupLayout(0),
-      entries:[{binding:0,resource:{buffer:outBuffer}},{binding:1,resource:{buffer:paramBuffer}}]
+  async function generateGPU(bytes, seed, adapt, step) {
+    const outBuffer = gpuDevice.createBuffer({
+      size: bytes * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
     });
-    const encoder=gpuDevice.createCommandEncoder();
-    const pass=encoder.beginComputePass();
-    pass.setPipeline(gpuPipeline); pass.setBindGroup(0,bindGroup);
-    pass.dispatchWorkgroups(Math.ceil(bytes/256)); pass.end();
-    const readBuffer=gpuDevice.createBuffer({size:bytes*4, usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
-    encoder.copyBufferToBuffer(outBuffer,0,readBuffer,0,bytes*4);
+    const paramData = new ArrayBuffer(16);
+    const dv = new DataView(paramData);
+    dv.setUint32(0, seed >>> 0, true);
+    dv.setUint32(4, new Uint32Array(new Float32Array([adapt]).buffer)[0], true);
+    dv.setUint32(8, step >>> 0, true);
+    dv.setUint32(12, bytes >>> 0, true);
+    const paramBuffer = gpuDevice.createBuffer({
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+    gpuDevice.queue.writeBuffer(paramBuffer, 0, paramData);
+    const bindGroup = gpuDevice.createBindGroup({
+      layout: gpuPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: outBuffer } },
+        { binding: 1, resource: { buffer: paramBuffer } }
+      ]
+    });
+    const encoder = gpuDevice.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(gpuPipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(bytes / 256));
+    pass.end();
+    const readBuffer = gpuDevice.createBuffer({
+      size: bytes * 4,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+    encoder.copyBufferToBuffer(outBuffer, 0, readBuffer, 0, bytes * 4);
     gpuDevice.queue.submit([encoder.finish()]);
     await readBuffer.mapAsync(GPUMapMode.READ);
-    const copy=new Uint32Array(readBuffer.getMappedRange().slice(0));
-    readBuffer.unmap(); outBuffer.destroy(); paramBuffer.destroy(); readBuffer.destroy();
-    const out=new Uint8Array(bytes); for(let i=0;i<bytes;i++) out[i]=copy[i]&255;
+    const copy = new Uint32Array(readBuffer.getMappedRange().slice(0));
+    readBuffer.unmap();
+    outBuffer.destroy();
+    paramBuffer.destroy();
+    readBuffer.destroy();
+    const out = new Uint8Array(bytes);
+    for (let i = 0; i < bytes; i++) out[i] = copy[i] & 255;
     return out;
   }
 
-  async function generateSmart(bytes, seed, adapt, step){
-    if(gpuReady){
-      try{ return await generateGPU(bytes, seed, adapt, step); }
-      catch(e){ log('GPU fail → CPU: '+e.message,'warn'); }
+  async function generateSmart(bytes, seed, adapt, step) {
+    if (gpuReady) {
+      try { return await generateGPU(bytes, seed, adapt, step); }
+      catch (e) { log('GPU fail → CPU: ' + e.message, 'warn'); }
     }
     return generateCPU(bytes, seed, adapt, step);
   }
 
-  const scoreOf=std=>1000/(1+std*100);
+  const scoreOf = std => 1000 / (1 + std * 100);
 
-  function downloadBlob(data, filename, type){
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([data],{type:type||'application/octet-stream'}));
-    a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+  function downloadBlob(data, filename, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: type || 'application/octet-stream' }));
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
-  function downloadBin(buf){
+  function downloadBin(buf) {
     downloadBlob(buf, 'adaptive_chameleon_pattern.bin');
   }
 
-  // USB flash-aligned (page 4K, erase-block 128K) — не форматирует флешку
-  function buildFlashFriendlyImage(patternBytes){
-    const page=4096, block=131072;
-    const header=new Uint8Array(64);
-    header.set(new TextEncoder().encode('ACPFLASH1'),0);
-    const dv=new DataView(header.buffer);
-    dv.setUint32(8,page,true); dv.setUint32(12,block,true); dv.setUint32(16,patternBytes.length,true);
-    const rawLen=64+patternBytes.length;
-    const total=Math.ceil(rawLen/block)*block;
-    const out=new Uint8Array(total);
-    out.set(header,0); out.set(patternBytes,64);
-    for(let i=rawLen;i<total;i++) out[i]=(patternBytes[(i-64)%patternBytes.length]^0xA5)&255;
+  function buildFlashFriendlyImage(patternBytes) {
+    const page = 4096, block = 131072;
+    const header = new Uint8Array(64);
+    header.set(new TextEncoder().encode('ACPFLASH1'), 0);
+    const dv = new DataView(header.buffer);
+    dv.setUint32(8, page, true);
+    dv.setUint32(12, block, true);
+    dv.setUint32(16, patternBytes.length, true);
+    const rawLen = 64 + patternBytes.length;
+    const total = Math.ceil(rawLen / block) * block;
+    const out = new Uint8Array(total);
+    out.set(header, 0);
+    out.set(patternBytes, 64);
+    for (let i = rawLen; i < total; i++) {
+      out[i] = (patternBytes[(i - 64) % patternBytes.length] ^ 0xA5) & 255;
+    }
     return out;
   }
 
-  function downloadUsb(buf){
+  function downloadUsb(buf) {
     downloadBlob(buildFlashFriendlyImage(buf), 'pattern_usb_flash.bin');
   }
 
-  // Динамический Arduino-скетч (паттерн перестраивается в RAM)
-  function buildArduinoSketch(){
-    return `// AdaptivePattern.ino — динамическая подстройка паттерна в RAM
+  // Cap-model Arduino: динамическая перестройка буфера (не RF-антенна)
+  function buildArduinoSketch() {
+    return `// AdaptivePattern_CapModel.ino
+// Динамическая перестройка паттерна в RAM (модель переменной ёмкости).
+// НЕ радиоантенна и НЕ RF из ячеек SRAM.
+
 #include <Arduino.h>
 
 static const uint16_t PAT_LEN = 512;
 static uint8_t pattern[PAT_LEN];
+
+static float Cmodel = 1.0f;
+static float Vmodel = 0.0f;
 static float adaptGain = 1.0f;
-static uint32_t seed = 0xA5A5u;
+static uint32_t seed = 0xC0FFEEu;
 static uint16_t stepId = 0;
 static float bestJitter = 1e9f;
 static uint8_t noImprove = 0;
@@ -409,7 +472,7 @@ static uint32_t mix32(uint32_t x) {
   return x ^ (x >> 16);
 }
 
-float measureJitter(uint16_t samples = 180) {
+float measureJitter(uint16_t samples = 160) {
   uint32_t prev = micros();
   float sum = 0, sum2 = 0;
   for (uint16_t i = 0; i < samples; i++) {
@@ -418,7 +481,8 @@ float measureJitter(uint16_t samples = 180) {
     uint32_t now = micros();
     float d = (float)(now - prev);
     prev = now;
-    sum += d; sum2 += d * d;
+    sum += d;
+    sum2 += d * d;
   }
   float mean = sum / samples;
   float var = sum2 / samples - mean * mean;
@@ -426,31 +490,32 @@ float measureJitter(uint16_t samples = 180) {
   return sqrt(var);
 }
 
-void rebuildPattern(float adapt, uint32_t s, uint16_t step) {
+void rebuildPattern(float C, float V, float adapt, uint32_t s, uint16_t step) {
   uint32_t s1 = mix32(0xDEADBEEFu ^ s ^ (step * 0x9E37u));
   uint32_t s2 = mix32(0x12345679u ^ s ^ step);
-  float prev = 0;
+  float prev = V * 0.01f;
+  float smooth = constrain(0.55f + 0.35f * C, 0.55f, 0.92f);
+  float drive  = constrain(1.25f - 0.35f * C, 0.55f, 1.20f);
+
   for (uint16_t i = 0; i < PAT_LEN; i++) {
     s1 = mix32(s1 + i);
     s2 = mix32(s2 + i * 0x9E37u);
-    float theta = (2.0f * 3.1415926f * 1.6180339f * i) / 256.0f + step * 0.01f;
+    float theta = (2.0f * 3.1415926f * 1.6180339f * i) / 256.0f
+                + step * 0.01f + V * 0.001f;
     float cpu = sinf(2.0f * 3.1415926f * i / 64.0f + theta * 0.15f);
     float ram = sinf(2.0f * 3.1415926f * i / 128.0f + theta * 0.07f);
-    float a = cosf(theta * 0.19f), b = sinf(theta * 0.41f + 1.17f);
+    float a = cosf(theta * 0.19f * drive);
+    float b = sinf(theta * 0.41f + 1.17f + V * 0.01f);
     float I = (a * a + b * b) * 0.5f;
     float suppress = I < 0.55f ? (0.55f - I) : 0.0f;
     float damp = I > 0.45f ? (I - 0.45f) : 0.0f;
-    float lattice = tanhf((a * 0.6f + b * 0.4f) * 0.8f);
-    float ifx = lattice * 0.5f * adapt - suppress * 0.3f * adapt - damp * 0.2f * adapt;
-    float uws = 0;
-    for (uint8_t k = 0; k < 6; k++)
-      uws += sinf(theta * (0.02f * (k + 1)) * 10.0f + k * 0.37f) / (1.0f + k * 0.15f);
-    uws = tanhf(uws * 0.4f) * adapt;
-    float raw = 0.25f * adapt * (0.5f * cpu + 0.3f * ram) + 0.22f * ifx + 0.18f * uws
-              + 0.05f * ((s1 & 255) / 255.0f) + 0.04f * ((s2 & 255) / 255.0f);
-    raw *= (1.0f - 0.15f * suppress);
-    raw = tanhf(raw);
-    float v = raw * 0.82f + prev * 0.18f;
+    float raw = adapt * (0.22f * cpu + 0.18f * ram + 0.16f * a + 0.12f * b)
+              - 0.12f * suppress * adapt
+              - 0.10f * damp * adapt
+              + 0.05f * ((s1 & 255) / 255.0f)
+              + 0.04f * ((s2 & 255) / 255.0f);
+    raw = tanhf(raw * drive);
+    float v = raw * (1.0f - smooth) + prev * smooth;
     prev = v;
     int val = (int)floorf((v + 1.0f) * 127.5f) % 256;
     if (val < 0) val += 256;
@@ -458,120 +523,164 @@ void rebuildPattern(float adapt, uint32_t s, uint16_t step) {
   }
 }
 
-uint8_t touchPattern() {
+uint8_t switchChargePasses() {
   uint8_t acc = 0;
-  for (uint16_t i = 0; i < PAT_LEN; i += 16) acc ^= pattern[i];
+  for (uint16_t i = 0; i < PAT_LEN; i += 8) acc ^= pattern[i];
+  for (uint16_t i = 0; i < PAT_LEN; i += 17) acc += pattern[i];
+  for (uint16_t i = 0; i < PAT_LEN; i += 31) acc ^= pattern[i] << 1;
   return acc;
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(300);
-  Serial.println(F("AdaptivePattern dynamic"));
+  delay(250);
+  Serial.println(F("Cap-model dynamic pattern (not an RF antenna)"));
   seed = (uint32_t)micros() ^ 0xA5A5u;
-  rebuildPattern(adaptGain, seed, stepId);
+  rebuildPattern(Cmodel, Vmodel, adaptGain, seed, stepId);
 }
 
 void loop() {
-  float j = measureJitter(180);
+  float j = measureJitter(160);
   seed ^= (uint32_t)(j * 1000.0f) ^ micros();
-  adaptGain = constrain(1.0f + j * 0.05f + noImprove * 0.05f, 0.7f, 1.8f);
+  Cmodel = constrain(0.8f + j * 0.08f + noImprove * 0.04f, 0.6f, 1.8f);
+  Vmodel += (j - 1.0f) * 0.15f;
+  if (Vmodel > 1000) Vmodel -= 1000;
+  if (Vmodel < -1000) Vmodel += 1000;
+  adaptGain = constrain(1.0f + j * 0.04f, 0.7f, 1.6f);
   stepId++;
-  rebuildPattern(adaptGain, seed, stepId);
-  volatile uint8_t sink = touchPattern();
+  rebuildPattern(Cmodel, Vmodel, adaptGain, seed, stepId);
+  volatile uint8_t sink = switchChargePasses();
   (void)sink;
-  if (j + 0.01f < bestJitter) { bestJitter = j; noImprove = 0; }
+  if (j + 0.02f < bestJitter) { bestJitter = j; noImprove = 0; }
   else noImprove++;
-  if (noImprove >= 5) { seed ^= micros() ^ 0x5A5Au; noImprove = 0; }
+  if (noImprove >= 6) {
+    seed ^= micros() ^ 0x5A5Au;
+    Vmodel *= -0.5f;
+    noImprove = 0;
+  }
   Serial.print(F("j=")); Serial.print(j, 3);
-  Serial.print(F(" adapt=")); Serial.println(adaptGain, 2);
-  delay(50);
+  Serial.print(F(" C=")); Serial.print(Cmodel, 2);
+  Serial.print(F(" V=")); Serial.println(Vmodel, 1);
+  delay(40);
 }
 `;
   }
 
-  function downloadArduino(){
-    downloadBlob(buildArduinoSketch(), 'AdaptivePattern.ino', 'text/plain');
+  function downloadArduino() {
+    downloadBlob(buildArduinoSketch(), 'AdaptivePattern_CapModel.ino', 'text/plain');
   }
 
-  async function runSmart(){
-    if(active) return;
-    active=true;
-    $('btnStart').disabled=true; $('btnStop').disabled=false; enableDownloads(false);
-    bestStd=Infinity; bestScore=-Infinity; bestPattern=null; pattern=null; setProgress(0);
+  async function runSmart() {
+    if (active) return;
+    active = true;
+    $('btnStart').disabled = true;
+    $('btnStop').disabled = false;
+    enablePatternDownloads(false);
+    bestStd = Infinity;
+    bestScore = -Infinity;
+    bestPattern = null;
+    pattern = null;
+    setProgress(0);
     await initGPU();
 
-    const mb=parseInt($('sizeMb').value,10)||2;
-    const bytes=mb*1024*1024;
-    const maxSteps=Math.max(3,Math.min(30,parseInt($('maxSteps').value,10)||10));
-    const patience=Math.max(1,Math.min(10,parseInt($('patience').value,10)||2));
-    log(`Старт: ${mb} МБ | ultra-wide + gates + lattice`);
-    $('stStatus').textContent='поиск...';
+    const mb = parseInt($('sizeMb').value, 10) || 2;
+    const bytes = mb * 1024 * 1024;
+    const maxSteps = Math.max(3, Math.min(30, parseInt($('maxSteps').value, 10) || 10));
+    const patience = Math.max(1, Math.min(10, parseInt($('patience').value, 10) || 2));
+    log('Старт: ' + mb + ' МБ | ultra-wide + gates + lattice');
+    $('stStatus').textContent = 'поиск...';
 
-    let noImprove=0, adapt=1.0;
-    for(let step=1; step<=maxSteps && active; step++){
-      $('stStep').textContent=`${step}/${maxSteps}`;
-      setProgress(((step-1)/maxSteps)*100);
-      const j=await measureJitter(800);
-      $('stStd').textContent=j.std.toFixed(4)+' ms';
-      log(`Шаг ${step}: σ=${j.std.toFixed(4)}`);
-      adapt=Math.max(0.7, Math.min(1.8, 1.0+j.std*3+(noImprove>0?0.15:0)));
+    let noImprove = 0, adapt = 1.0;
+    for (let step = 1; step <= maxSteps && active; step++) {
+      $('stStep').textContent = step + '/' + maxSteps;
+      setProgress(((step - 1) / maxSteps) * 100);
+      const j = await measureJitter(800);
+      $('stStd').textContent = j.std.toFixed(4) + ' ms';
+      log('Шаг ' + step + ': σ=' + j.std.toFixed(4));
+      adapt = Math.max(0.7, Math.min(1.8, 1.0 + j.std * 3 + (noImprove > 0 ? 0.15 : 0)));
       let buf;
-      try{
-        const t0=performance.now();
-        buf=await generateSmart(bytes, j.seed, adapt, step);
-        log(`  gen ${(performance.now()-t0).toFixed(0)} ms (${gpuReady?'GPU':'CPU'})`);
-      }catch(e){ log('Ошибка: '+e.message,'bad'); break; }
-      if(!active) break;
-      pattern=buf; draw(buf);
-      await new Promise(r=>setTimeout(r,120));
-      const after=await measureJitter(700);
-      $('stStd').textContent=after.std.toFixed(4)+' ms';
-      const sc=scoreOf(after.std);
-      $('stScore').textContent=sc.toFixed(2);
-      log(`  контроль σ=${after.std.toFixed(4)} score=${sc.toFixed(2)}`);
-      if(after.std<bestStd-1e-6 || sc>bestScore){
-        bestStd=after.std; bestScore=sc; bestPattern=new Uint8Array(buf);
-        $('stBest').textContent=bestStd.toFixed(4)+' ms';
-        noImprove=0; log('  лучший обновлён','ok');
-      }else{
-        noImprove++; log(`  без улучшения (${noImprove}/${patience})`,'warn');
+      try {
+        const t0 = performance.now();
+        buf = await generateSmart(bytes, j.seed, adapt, step);
+        log('  gen ' + (performance.now() - t0).toFixed(0) + ' ms (' + (gpuReady ? 'GPU' : 'CPU') + ')');
+      } catch (e) {
+        log('Ошибка: ' + e.message, 'bad');
+        break;
       }
-      if(noImprove>=patience && step>=3){ log('Улучшения прекратились','warn'); break; }
+      if (!active) break;
+      pattern = buf;
+      draw(buf);
+      await new Promise(r => setTimeout(r, 120));
+      const after = await measureJitter(700);
+      $('stStd').textContent = after.std.toFixed(4) + ' ms';
+      const sc = scoreOf(after.std);
+      $('stScore').textContent = sc.toFixed(2);
+      log('  контроль σ=' + after.std.toFixed(4) + ' score=' + sc.toFixed(2));
+      if (after.std < bestStd - 1e-6 || sc > bestScore) {
+        bestStd = after.std;
+        bestScore = sc;
+        bestPattern = new Uint8Array(buf);
+        $('stBest').textContent = bestStd.toFixed(4) + ' ms';
+        noImprove = 0;
+        log('  лучший обновлён', 'ok');
+      } else {
+        noImprove++;
+        log('  без улучшения (' + noImprove + '/' + patience + ')', 'warn');
+      }
+      if (noImprove >= patience && step >= 3) {
+        log('Улучшения прекратились', 'warn');
+        break;
+      }
     }
 
-    if(bestPattern){
-      pattern=bestPattern; draw(pattern);
-      $('stStd').textContent=bestStd.toFixed(4)+' ms';
+    if (bestPattern) {
+      pattern = bestPattern;
+      draw(pattern);
+      $('stStd').textContent = bestStd.toFixed(4) + ' ms';
       setProgress(100);
-      downloadBin(pattern); // авто .bin
-      log('Автоскачивание .bin','ok');
-      enableDownloads(true);
-      $('stStatus').textContent='готов';
-    }else{
-      $('stStatus').textContent='ошибка'; log('Нет результата','bad');
+      downloadBin(pattern);
+      log('Автоскачивание .bin', 'ok');
+      enablePatternDownloads(true);
+      $('stStatus').textContent = 'готов';
+    } else {
+      $('stStatus').textContent = 'ошибка';
+      log('Нет результата', 'bad');
     }
-    $('btnStart').disabled=false; $('btnStop').disabled=true; active=false;
+    $('btnStart').disabled = false;
+    $('btnStop').disabled = true;
+    active = false;
   }
 
-  function stop(){
-    active=false;
-    $('stStatus').textContent=pattern?'остановлен':'стоп';
-    $('btnStart').disabled=false; $('btnStop').disabled=true;
-    if(pattern) enableDownloads(true);
+  function stop() {
+    active = false;
+    $('stStatus').textContent = pattern ? 'остановлен' : 'стоп';
+    $('btnStart').disabled = false;
+    $('btnStop').disabled = true;
+    if (pattern) enablePatternDownloads(true);
     log('Стоп');
   }
 
-  $('btnStart').onclick=()=>runSmart().catch(e=>{
-    active=false; log(String(e),'bad');
-    $('btnStart').disabled=false; $('btnStop').disabled=true;
+  $('btnStart').onclick = () => runSmart().catch(e => {
+    active = false;
+    log(String(e), 'bad');
+    $('btnStart').disabled = false;
+    $('btnStop').disabled = true;
   });
-  $('btnStop').onclick=stop;
-  $('btnBin').onclick=()=>{ if(pattern){ downloadBin(pattern); log('Скачан .bin','ok'); } };
-  $('btnUsb').onclick=()=>{ if(pattern){ downloadUsb(pattern); log('Скачан USB flash-aligned','ok'); } };
-  $('btnArduino').onclick=()=>{ downloadArduino(); log('Скачан AdaptivePattern.ino','ok'); };
+  $('btnStop').onclick = stop;
+  $('btnBin').onclick = () => {
+    if (pattern) { downloadBin(pattern); log('Скачан .bin', 'ok'); }
+  };
+  $('btnUsb').onclick = () => {
+    if (pattern) { downloadUsb(pattern); log('Скачан USB flash-aligned', 'ok'); }
+  };
+  // Arduino — всегда, без паттерна
+  $('btnArduino').onclick = () => {
+    downloadArduino();
+    log('Скачан AdaptivePattern_CapModel.ino', 'ok');
+  };
 
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, cv.width, cv.height);
 })();
 </script>
 </body>
