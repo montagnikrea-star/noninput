@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Pattern — GPU + Best Effort + Auto Download</title>
+  <title>Smart Pattern — GPU · Gates · Lattice</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -61,10 +61,10 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Умная генерация → лучший результат → автоскачивание</h1>
+    <h1>Smart Pattern · GPU · multi-scale · lattice</h1>
     <div class="sub">
-      GPU (WebGPU compute) ускоряет генерацию, если доступен. Иначе CPU.
-      Цикл ищет минимальный jitter-score; без улучшений — стоп и скачивание .bin.
+      Умный поиск лучшего результата по джиттеру. Генерация: WebGPU (если есть) или CPU.
+      Многомасштабная структура данных и interference lattice. Без улучшений — стоп и автоскачивание.
     </div>
 
     <div class="card">
@@ -89,7 +89,7 @@
         </div>
       </div>
       <div class="row">
-        <button id="btnStart">Умный поиск лучшего</button>
+        <button id="btnStart">Умный поиск</button>
         <button id="btnStop" class="secondary" disabled>Стоп</button>
         <button id="btnDownload" class="secondary" disabled>Скачать ещё раз</button>
       </div>
@@ -126,388 +126,372 @@
   const imgData = ctx.createImageData(cv.width, cv.height);
   const logEl = $('log');
 
-  let active = false;
-  let pattern = null;
-  let bestPattern = null;
-  let bestStd = Infinity;
-  let bestScore = -Infinity;
+  const G_CPU=64, G_RAM=4096, G_SSD=65536, G_SSD1M=1048576;
+  const G_PCIE=256, G_NET=1500, G_TCP=65535, G_SYS=1048576*4;
 
-  // WebGPU
-  let gpuDevice = null;
-  let gpuPipeline = null;
-  let gpuReady = false;
+  let active=false, pattern=null, bestPattern=null;
+  let bestStd=Infinity, bestScore=-Infinity;
+  let gpuDevice=null, gpuPipeline=null, gpuReady=false;
 
-  const log = (m, c='') => {
-    const d = document.createElement('div');
-    if (c) d.className = c;
-    d.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
-    logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;
+  const log=(m,c='')=>{
+    const d=document.createElement('div');
+    if(c) d.className=c;
+    d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;
+    logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight;
   };
-  const setProgress = p => { $('progress').style.width = Math.max(0, Math.min(100, p)) + '%'; };
+  const setProgress=p=>{ $('progress').style.width=Math.max(0,Math.min(100,p))+'%'; };
 
-  function draw(buf) {
-    if (!buf?.length) return;
-    const w = cv.width, h = cv.height, total = w * h, len = buf.length;
-    const data = imgData.data;
-    for (let p = 0; p < total; p++) {
-      const v = buf[((p * len / total) | 0) % len];
-      const o = p * 4;
-      data[o] = Math.min(255, (v * 1.25) | 0);
-      data[o+1] = Math.min(255, (v * 0.75 + 35) | 0);
-      data[o+2] = Math.min(255, ((255 - v) * 0.9 + 25) | 0);
-      data[o+3] = 255;
+  function draw(buf){
+    if(!buf?.length) return;
+    const w=cv.width,h=cv.height,total=w*h,len=buf.length,data=imgData.data;
+    for(let p=0;p<total;p++){
+      const v=buf[((p*len/total)|0)%len];
+      const o=p*4;
+      data[o]=Math.min(255,(v*1.25)|0);
+      data[o+1]=Math.min(255,(v*0.75+35)|0);
+      data[o+2]=Math.min(255,((255-v)*0.9+25)|0);
+      data[o+3]=255;
     }
-    ctx.putImageData(imgData, 0, 0);
+    ctx.putImageData(imgData,0,0);
   }
 
-  async function measureJitter(samples = 900) {
-    let t = performance.now();
-    for (let i = 0; i < 500; i++) t = performance.now();
-    const d = new Float64Array(samples);
-    let prev = performance.now();
-    for (let i = 0; i < samples; i++) {
-      let x = i;
-      x = Math.imul(x ^ (x << 13), 0x5bd1e995);
-      x ^= x >>> 15;
-      const n = performance.now();
-      d[i] = n - prev;
-      prev = n;
-      if ((i & 127) === 0) await new Promise(r => setTimeout(r, 0));
+  async function measureJitter(samples=900){
+    let t=performance.now(); for(let i=0;i<500;i++) t=performance.now();
+    const d=new Float64Array(samples); let prev=performance.now();
+    for(let i=0;i<samples;i++){
+      let x=i; x=Math.imul(x^(x<<13),0x5bd1e995); x^=x>>>15;
+      const n=performance.now(); d[i]=n-prev; prev=n;
+      if((i&127)===0) await new Promise(r=>setTimeout(r,0));
     }
-    let sum = 0, sum2 = 0;
-    for (let i = 0; i < samples; i++) { sum += d[i]; sum2 += d[i] * d[i]; }
-    const mean = sum / samples;
-    const std = Math.sqrt(Math.max(0, sum2 / samples - mean * mean));
-    let seed = (Math.floor(mean * 1e6) ^ Math.floor(std * 1e7)) >>> 0;
-    seed = Math.imul(seed ^ (seed >>> 16), 0x7feb352d) >>> 0;
-    return { mean, std, seed };
+    let sum=0,sum2=0;
+    for(let i=0;i<samples;i++){sum+=d[i];sum2+=d[i]*d[i];}
+    const mean=sum/samples, std=Math.sqrt(Math.max(0,sum2/samples-mean*mean));
+    let seed=(Math.floor(mean*1e6)^Math.floor(std*1e7))>>>0;
+    seed=Math.imul(seed^(seed>>>16),0x7feb352d)>>>0;
+    return {mean,std,seed};
   }
 
-  // ----- CPU fallback generator -----
-  function generateCPU(bytes, seed, adapt, step) {
-    const out = new Uint8Array(bytes);
-    let s1 = (0xDEADBEEF ^ seed ^ (step * 0x9E3779B9)) >>> 0;
-    let s2 = (0x12345679 ^ seed ^ step) >>> 0;
-    const mix = x => {
-      x = (x + 0x9E3779B9) >>> 0;
-      x = Math.imul(x ^ (x >>> 16), 0x85EBCA6B) >>> 0;
-      x = Math.imul(x ^ (x >>> 13), 0xC2B2AE35) >>> 0;
-      return (x ^ (x >>> 16)) >>> 0;
+  function systemWideGates(i, theta, adapt){
+    const cpu=Math.sin(2*Math.PI*i/G_CPU+theta*0.15);
+    const ram=Math.sin(2*Math.PI*i/G_RAM+theta*0.07);
+    const ssd=Math.sin(2*Math.PI*i/G_SSD+theta*0.03);
+    const ssdB=Math.sin(2*Math.PI*i/G_SSD1M+theta*0.01);
+    const pcie=Math.sin(2*Math.PI*i/G_PCIE+theta*0.11);
+    const net=Math.sin(2*Math.PI*i/G_NET+theta*0.05);
+    const tcp=Math.sin(2*Math.PI*i/G_TCP+theta*0.02);
+    const sys=Math.sin(2*Math.PI*i/G_SYS+theta*0.005);
+    const l1=Math.sin(2*Math.PI*i/G_CPU+2*Math.PI*i/G_RAM);
+    const l2=Math.sin(2*Math.PI*i/G_RAM+2*Math.PI*i/G_SSD);
+    const l3=Math.sin(2*Math.PI*i/G_SSD+2*Math.PI*i/G_NET);
+    const l4=Math.sin(2*Math.PI*i/G_PCIE+2*Math.PI*i/G_CPU);
+    return adapt*(
+      0.12*cpu+0.10*ram+0.08*ssd+0.05*ssdB+
+      0.07*pcie+0.07*net+0.05*tcp+0.04*sys+
+      0.05*l1+0.04*l2+0.03*l3+0.03*l4
+    );
+  }
+
+  function interferenceLattice(i, theta, adapt){
+    const sources=[
+      {a:1.00,w:0.07,p:0.00},{a:0.85,w:0.19,p:1.17},{a:0.70,w:0.41,p:2.09},
+      {a:0.55,w:0.93,p:0.61},{a:0.40,w:1.70,p:2.70}
+    ];
+    let re=0,im=0;
+    for(let k=0;k<sources.length;k++){
+      const s=sources[k];
+      const phase=s.w*theta+s.p+i*(0.002+k*0.0007);
+      re+=s.a*Math.cos(phase); im+=s.a*Math.sin(phase);
+    }
+    const In=(re*re+im*im)/(sources.length*sources.length);
+    const suppress=Math.max(0,0.55-In);
+    const damp=Math.max(0,In-0.45);
+    const lattice=Math.tanh((re*0.6+im*0.4)*0.8);
+    return {
+      out: lattice*0.55*adapt - suppress*0.35*adapt - damp*0.25*adapt,
+      suppress, damp
     };
-    const PHI = 1.618033988749895, PI = Math.PI;
-    let prev = 0, runMean = 0.15, prevRaw = 0;
-    for (let i = 0; i < bytes; i++) {
-      s1 = mix(s1 + i);
-      s2 = mix(s2 + Math.imul(i, 0x9E3779B9));
-      const theta = (2 * PI * PHI * i) / 256 + step * 0.01;
-      const cpu = Math.sin(2 * PI * i / 64 + theta * 0.15);
-      const ram = Math.sin(2 * PI * i / 4096 + theta * 0.07);
-      const ssd = Math.sin(2 * PI * i / 65536 + theta * 0.03);
-      const a = Math.cos(theta * 0.19), b = Math.sin(theta * 0.41 + 1.17);
-      const I = (a * a + b * b) / 2;
-      const suppress = Math.max(0, 0.55 - I);
-      const damp = Math.max(0, I - 0.45);
-      let raw =
-        0.18 * cpu + 0.16 * ram + 0.12 * ssd +
-        0.14 * (a * 0.6 + b * 0.4) * adapt -
-        0.10 * suppress * adapt - 0.08 * damp * adapt +
-        0.05 * ((s1 & 255) / 255) + 0.04 * ((s2 & 255) / 255);
-      raw = Math.tanh(raw);
-      runMean = runMean * 0.995 + Math.abs(raw) * 0.005;
-      const hole = Math.max(0, (runMean - Math.abs(raw)) / (runMean + 1e-6));
-      const spike = Math.max(0, (Math.abs(raw) - runMean * 1.8) / (Math.abs(raw) + 1e-6));
-      let v = raw * (1 - 0.35 * spike) + runMean * Math.sign(raw || 1) * 0.35 * spike;
-      v = v + hole * 0.45 * (runMean * Math.sign(v || 1) - v);
-      v = Math.tanh(v) * 0.82 + prevRaw * 0.18;
-      prevRaw = v;
-      let byte = Math.floor(((v + 1) * 127.5) % 256);
-      if (byte < 0) byte += 256;
-      out[i] = byte & 255;
+  }
+
+  function generateCPU(bytes, seed, adapt, step){
+    const out=new Uint8Array(bytes);
+    let s1=(0xDEADBEEF^seed^(step*0x9E3779B9))>>>0;
+    let s2=(0x12345679^seed^step)>>>0;
+    const mix=x=>{
+      x=(x+0x9E3779B9)>>>0;
+      x=Math.imul(x^(x>>>16),0x85EBCA6B)>>>0;
+      x=Math.imul(x^(x>>>13),0xC2B2AE35)>>>0;
+      return (x^(x>>>16))>>>0;
+    };
+    const PHI=1.618033988749895, PI=Math.PI;
+    let prevRaw=0, runMean=0.15;
+    for(let i=0;i<bytes;i++){
+      s1=mix(s1+i); s2=mix(s2+Math.imul(i,0x9E3779B9));
+      const theta=(2*PI*PHI*i)/256+step*0.01;
+      const gates=systemWideGates(i,theta,adapt);
+      const ifx=interferenceLattice(i,theta,adapt);
+      const t128=Math.sin((2*PI*i)/(256/128));
+      let raw=
+        0.10*gates+0.12*ifx.out+0.06*t128+
+        0.05*((s1&255)/255)+0.04*((s2&255)/255);
+      raw*=(1-0.18*ifx.suppress);
+      raw=raw*(1-0.12*ifx.damp)+runMean*Math.sign(raw||1)*0.12*ifx.damp;
+      raw=Math.tanh(raw);
+      runMean=runMean*0.995+Math.abs(raw)*0.005;
+      const hole=Math.max(0,(runMean-Math.abs(raw))/(runMean+1e-6));
+      const spike=Math.max(0,(Math.abs(raw)-runMean*1.8)/(Math.abs(raw)+1e-6));
+      let v=raw*(1-0.3*spike)+runMean*Math.sign(raw||1)*0.3*spike;
+      v=v+hole*0.4*(runMean*Math.sign(v||1)-v);
+      v=Math.tanh(v)*0.82+prevRaw*0.18;
+      prevRaw=v;
+      let b=Math.floor(((v+1)*127.5)%256); if(b<0)b+=256;
+      out[i]=b&255;
     }
     return out;
   }
 
-  // ----- WebGPU init + compute -----
-  const SHADER = `
-    struct Params {
-      seed: u32,
-      adapt_bits: u32,
-      step: u32,
-      size: u32,
-    };
+  // GPU shader: multi-scale + lattice approximation in parallel
+  const SHADER=`
+    struct Params { seed:u32, adapt_bits:u32, step:u32, size:u32, };
     @group(0) @binding(0) var<storage, read_write> outBuf: array<u32>;
     @group(0) @binding(1) var<uniform> params: Params;
 
-    fn mix32(x: u32) -> u32 {
-      var z = x + 0x9E3779B9u;
-      z = (z ^ (z >> 16u)) * 0x85EBCA6Bu;
-      z = (z ^ (z >> 13u)) * 0xC2B2AE35u;
-      return z ^ (z >> 16u);
+    fn mix32(x:u32)->u32{
+      var z=x+0x9E3779B9u;
+      z=(z^(z>>16u))*0x85EBCA6Bu;
+      z=(z^(z>>13u))*0xC2B2AE35u;
+      return z^(z>>16u);
     }
 
     @compute @workgroup_size(256)
-    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-      let i = gid.x;
-      if (i >= params.size) { return; }
-      let seed = params.seed;
-      let step = params.step;
-      let adapt = bitcast<f32>(params.adapt_bits);
+    fn main(@builtin(global_invocation_id) gid:vec3<u32>){
+      let i=gid.x;
+      if(i>=params.size){ return; }
+      let seed=params.seed;
+      let step=params.step;
+      let adapt=bitcast<f32>(params.adapt_bits);
+      let fi=f32(i);
+      let theta=(2.0*3.14159265*1.61803398*fi)/256.0+f32(step)*0.01;
 
-      var s1 = mix32(0xDEADBEEFu ^ seed ^ (step * 0x9E3779B9u) ^ i);
-      var s2 = mix32(0x12345679u ^ seed ^ step ^ (i * 0x85EBu));
+      var s1=mix32(0xDEADBEEFu^seed^(step*0x9E3779B9u)^i);
+      var s2=mix32(0x12345679u^seed^step^(i*0x85EBu));
 
-      let fi = f32(i);
-      let theta = (2.0 * 3.14159265 * 1.61803398 * fi) / 256.0 + f32(step) * 0.01;
-      let cpu = sin(2.0 * 3.14159265 * fi / 64.0 + theta * 0.15);
-      let ram = sin(2.0 * 3.14159265 * fi / 4096.0 + theta * 0.07);
-      let ssd = sin(2.0 * 3.14159265 * fi / 65536.0 + theta * 0.03);
-      let a = cos(theta * 0.19);
-      let b = sin(theta * 0.41 + 1.17);
-      let I = (a * a + b * b) * 0.5;
-      let suppress = max(0.0, 0.55 - I);
-      let damp = max(0.0, I - 0.45);
-      var raw =
-        0.18 * cpu + 0.16 * ram + 0.12 * ssd +
-        0.14 * (a * 0.6 + b * 0.4) * adapt -
-        0.10 * suppress * adapt - 0.08 * damp * adapt +
-        0.05 * f32(s1 & 255u) / 255.0 + 0.04 * f32(s2 & 255u) / 255.0;
-      raw = tanh(raw);
-      var val = i32(floor(((raw + 1.0) * 127.5) % 256.0));
-      if (val < 0) { val = val + 256; }
-      // pack 1 byte into u32 slot (low 8 bits)
-      outBuf[i] = u32(val) & 255u;
+      let cpu=sin(2.0*3.14159265*fi/64.0+theta*0.15);
+      let ram=sin(2.0*3.14159265*fi/4096.0+theta*0.07);
+      let ssd=sin(2.0*3.14159265*fi/65536.0+theta*0.03);
+      let pcie=sin(2.0*3.14159265*fi/256.0+theta*0.11);
+      let net=sin(2.0*3.14159265*fi/1500.0+theta*0.05);
+      let gates=adapt*(0.14*cpu+0.12*ram+0.10*ssd+0.08*pcie+0.08*net);
+
+      let a=cos(theta*0.19); let b=sin(theta*0.41+1.17);
+      let c=cos(theta*0.93+0.61); let d=sin(theta*1.70+2.70);
+      let re=a+0.85*b+0.7*c; let im=b+0.7*d;
+      let In=(re*re+im*im)/16.0;
+      let suppress=max(0.0,0.55-In);
+      let dampv=max(0.0,In-0.45);
+      let lattice=tanh((re*0.6+im*0.4)*0.5);
+      let ifx=lattice*0.55*adapt-suppress*0.35*adapt-dampv*0.25*adapt;
+
+      var raw=0.12*gates+0.14*ifx+0.05*f32(s1&255u)/255.0+0.04*f32(s2&255u)/255.0;
+      raw=raw*(1.0-0.18*suppress);
+      raw=tanh(raw);
+      var val=i32(floor(((raw+1.0)*127.5)%256.0));
+      if(val<0){ val=val+256; }
+      outBuf[i]=u32(val)&255u;
     }
   `;
 
-  async function initGPU() {
-    if (!('gpu' in navigator)) {
-      $('stBackend').textContent = 'CPU';
-      log('WebGPU нет — CPU', 'warn');
+  async function initGPU(){
+    if(!('gpu' in navigator)){
+      $('stBackend').textContent='CPU';
+      log('WebGPU недоступен — CPU','warn');
       return false;
     }
-    try {
-      const adapter = await navigator.gpu.requestAdapter();
-      if (!adapter) throw new Error('no adapter');
-      gpuDevice = await adapter.requestDevice();
-      const module = gpuDevice.createShaderModule({ code: SHADER });
-      gpuPipeline = gpuDevice.createComputePipeline({
-        layout: 'auto',
-        compute: { module, entryPoint: 'main' }
+    try{
+      const adapter=await navigator.gpu.requestAdapter();
+      if(!adapter) throw new Error('no adapter');
+      gpuDevice=await adapter.requestDevice();
+      const module=gpuDevice.createShaderModule({code:SHADER});
+      gpuPipeline=gpuDevice.createComputePipeline({
+        layout:'auto', compute:{module, entryPoint:'main'}
       });
-      gpuReady = true;
-      $('stBackend').textContent = 'WebGPU';
-      log('WebGPU compute готов', 'ok');
+      gpuReady=true;
+      $('stBackend').textContent='WebGPU';
+      log('WebGPU готов','ok');
       return true;
-    } catch (e) {
-      gpuReady = false;
-      $('stBackend').textContent = 'CPU';
-      log('GPU init fail: ' + e.message + ' → CPU', 'warn');
+    }catch(e){
+      gpuReady=false;
+      $('stBackend').textContent='CPU';
+      log('GPU init: '+e.message+' → CPU','warn');
       return false;
     }
   }
 
-  async function generateGPU(bytes, seed, adapt, step) {
-    // outBuf as u32 array length = bytes (1 byte/value in low bits)
-    const outU32 = new Uint32Array(bytes);
-    const outBuffer = gpuDevice.createBuffer({
-      size: outU32.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+  async function generateGPU(bytes, seed, adapt, step){
+    const outBuffer=gpuDevice.createBuffer({
+      size:bytes*4, usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC
     });
-    const paramData = new ArrayBuffer(16);
-    const pView = new DataView(paramData);
-    pView.setUint32(0, seed >>> 0, true);
-    pView.setUint32(4, new Float32Array([adapt])[0] ? new Uint32Array(new Float32Array([adapt]).buffer)[0] : 0, true);
-    // correct adapt bits
-    const f32 = new Float32Array([adapt]);
-    const u32 = new Uint32Array(f32.buffer);
-    pView.setUint32(4, u32[0], true);
-    pView.setUint32(8, step >>> 0, true);
-    pView.setUint32(12, bytes >>> 0, true);
-
-    const paramBuffer = gpuDevice.createBuffer({
-      size: 16,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    const paramData=new ArrayBuffer(16);
+    const dv=new DataView(paramData);
+    dv.setUint32(0,seed>>>0,true);
+    dv.setUint32(4,new Uint32Array(new Float32Array([adapt]).buffer)[0],true);
+    dv.setUint32(8,step>>>0,true);
+    dv.setUint32(12,bytes>>>0,true);
+    const paramBuffer=gpuDevice.createBuffer({
+      size:16, usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST
     });
-    gpuDevice.queue.writeBuffer(paramBuffer, 0, paramData);
+    gpuDevice.queue.writeBuffer(paramBuffer,0,paramData);
 
-    const bindGroup = gpuDevice.createBindGroup({
-      layout: gpuPipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: outBuffer } },
-        { binding: 1, resource: { buffer: paramBuffer } }
+    const bindGroup=gpuDevice.createBindGroup({
+      layout:gpuPipeline.getBindGroupLayout(0),
+      entries:[
+        {binding:0, resource:{buffer:outBuffer}},
+        {binding:1, resource:{buffer:paramBuffer}}
       ]
     });
 
-    const encoder = gpuDevice.createCommandEncoder();
-    const pass = encoder.beginComputePass();
+    const encoder=gpuDevice.createCommandEncoder();
+    const pass=encoder.beginComputePass();
     pass.setPipeline(gpuPipeline);
-    pass.setBindGroup(0, bindGroup);
-    pass.dispatchWorkgroups(Math.ceil(bytes / 256));
+    pass.setBindGroup(0,bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(bytes/256));
     pass.end();
 
-    const readBuffer = gpuDevice.createBuffer({
-      size: outU32.byteLength,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    const readBuffer=gpuDevice.createBuffer({
+      size:bytes*4, usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ
     });
-    encoder.copyBufferToBuffer(outBuffer, 0, readBuffer, 0, outU32.byteLength);
+    encoder.copyBufferToBuffer(outBuffer,0,readBuffer,0,bytes*4);
     gpuDevice.queue.submit([encoder.finish()]);
-
     await readBuffer.mapAsync(GPUMapMode.READ);
-    const copy = new Uint32Array(readBuffer.getMappedRange().slice(0));
+    const copy=new Uint32Array(readBuffer.getMappedRange().slice(0));
     readBuffer.unmap();
-    outBuffer.destroy();
-    paramBuffer.destroy();
-    readBuffer.destroy();
+    outBuffer.destroy(); paramBuffer.destroy(); readBuffer.destroy();
 
-    const out = new Uint8Array(bytes);
-    for (let i = 0; i < bytes; i++) out[i] = copy[i] & 255;
+    const out=new Uint8Array(bytes);
+    for(let i=0;i<bytes;i++) out[i]=copy[i]&255;
     return out;
   }
 
-  async function generateSmart(bytes, seed, adapt, step) {
-    if (gpuReady) {
-      try {
-        return await generateGPU(bytes, seed, adapt, step);
-      } catch (e) {
-        log('GPU gen fail → CPU: ' + e.message, 'warn');
-      }
+  async function generateSmart(bytes, seed, adapt, step){
+    if(gpuReady){
+      try{ return await generateGPU(bytes, seed, adapt, step); }
+      catch(e){ log('GPU gen fail → CPU: '+e.message,'warn'); }
     }
     return generateCPU(bytes, seed, adapt, step);
   }
 
-  function scoreOf(std) {
-    // выше = лучше (меньше jitter)
-    return 1000 / (1 + std * 100);
+  const scoreOf=std=>1000/(1+std*100);
+
+  function downloadBin(buf){
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([buf],{type:'application/octet-stream'}));
+    a.download='adaptive_chameleon_pattern.bin';
+    a.click(); URL.revokeObjectURL(a.href);
   }
 
-  function downloadBin(buf) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/octet-stream' }));
-    a.download = 'adaptive_chameleon_pattern.bin';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  async function runSmart() {
-    if (active) return;
-    active = true;
-    $('btnStart').disabled = true;
-    $('btnStop').disabled = false;
-    $('btnDownload').disabled = true;
-    bestStd = Infinity;
-    bestScore = -Infinity;
-    bestPattern = null;
-    pattern = null;
+  async function runSmart(){
+    if(active) return;
+    active=true;
+    $('btnStart').disabled=true;
+    $('btnStop').disabled=false;
+    $('btnDownload').disabled=true;
+    bestStd=Infinity; bestScore=-Infinity; bestPattern=null; pattern=null;
     setProgress(0);
 
     await initGPU();
 
-    const mb = parseInt($('sizeMb').value, 10) || 2;
-    const bytes = mb * 1024 * 1024;
-    const maxSteps = Math.max(3, Math.min(30, parseInt($('maxSteps').value, 10) || 10));
-    const patience = Math.max(1, Math.min(10, parseInt($('patience').value, 10) || 2));
+    const mb=parseInt($('sizeMb').value,10)||2;
+    const bytes=mb*1024*1024;
+    const maxSteps=Math.max(3,Math.min(30,parseInt($('maxSteps').value,10)||10));
+    const patience=Math.max(1,Math.min(10,parseInt($('patience').value,10)||2));
 
-    log(`Старт умного поиска: ${mb} МБ, до ${maxSteps} шагов, patience=${patience}`);
-    $('stStatus').textContent = 'поиск...';
+    log(`Старт: ${mb} МБ, шагов ≤${maxSteps}, patience=${patience}`);
+    $('stStatus').textContent='поиск...';
 
-    let noImprove = 0;
-    let adapt = 1.0;
+    let noImprove=0, adapt=1.0;
 
-    for (let step = 1; step <= maxSteps && active; step++) {
-      $('stStep').textContent = `${step}/${maxSteps}`;
-      setProgress(((step - 1) / maxSteps) * 100);
+    for(let step=1; step<=maxSteps && active; step++){
+      $('stStep').textContent=`${step}/${maxSteps}`;
+      setProgress(((step-1)/maxSteps)*100);
 
-      const j = await measureJitter(800);
-      $('stStd').textContent = j.std.toFixed(4) + ' ms';
+      const j=await measureJitter(800);
+      $('stStd').textContent=j.std.toFixed(4)+' ms';
       log(`Шаг ${step}: σ=${j.std.toFixed(4)}`);
 
-      // умная адаптация: при высоком jitter усиливаем damp-ветку через adapt
-      adapt = Math.max(0.7, Math.min(1.8, 1.0 + j.std * 3 + (noImprove > 0 ? 0.15 : 0)));
+      adapt=Math.max(0.7, Math.min(1.8, 1.0+j.std*3+(noImprove>0?0.15:0)));
 
       let buf;
-      try {
-        const t0 = performance.now();
-        buf = await generateSmart(bytes, j.seed, adapt, step);
-        log(`  gen ${(performance.now() - t0).toFixed(0)} ms (${gpuReady ? 'GPU' : 'CPU'})`);
-      } catch (e) {
-        log('Ошибка генерации: ' + e.message, 'bad');
-        break;
+      try{
+        const t0=performance.now();
+        buf=await generateSmart(bytes, j.seed, adapt, step);
+        log(`  gen ${(performance.now()-t0).toFixed(0)} ms (${gpuReady?'GPU':'CPU'})`);
+      }catch(e){
+        log('Ошибка: '+e.message,'bad'); break;
       }
-      if (!active) break;
+      if(!active) break;
 
-      pattern = buf;
-      draw(buf);
-
-      // контроль после удержания в RAM
-      await new Promise(r => setTimeout(r, 120));
-      const after = await measureJitter(700);
-      $('stStd').textContent = after.std.toFixed(4) + ' ms';
-      const sc = scoreOf(after.std);
-      $('stScore').textContent = sc.toFixed(2);
+      pattern=buf; draw(buf);
+      await new Promise(r=>setTimeout(r,120));
+      const after=await measureJitter(700);
+      $('stStd').textContent=after.std.toFixed(4)+' ms';
+      const sc=scoreOf(after.std);
+      $('stScore').textContent=sc.toFixed(2);
       log(`  контроль σ=${after.std.toFixed(4)} score=${sc.toFixed(2)}`);
 
-      if (after.std < bestStd - 1e-6 || sc > bestScore) {
-        bestStd = after.std;
-        bestScore = sc;
-        bestPattern = new Uint8Array(buf);
-        $('stBest').textContent = bestStd.toFixed(4) + ' ms';
-        noImprove = 0;
-        log('  лучший обновлён', 'ok');
-      } else {
-        noImprove++;
-        log(`  без улучшения (${noImprove}/${patience})`, 'warn');
+      if(after.std<bestStd-1e-6 || sc>bestScore){
+        bestStd=after.std; bestScore=sc;
+        bestPattern=new Uint8Array(buf);
+        $('stBest').textContent=bestStd.toFixed(4)+' ms';
+        noImprove=0; log('  лучший обновлён','ok');
+      }else{
+        noImprove++; log(`  без улучшения (${noImprove}/${patience})`,'warn');
       }
 
-      if (noImprove >= patience && step >= 3) {
-        log('Улучшения прекратились — финал', 'warn');
-        break;
+      if(noImprove>=patience && step>=3){
+        log('Улучшения прекратились','warn'); break;
       }
     }
 
-    if (bestPattern) {
-      pattern = bestPattern;
-      draw(pattern);
-      $('stStd').textContent = bestStd.toFixed(4) + ' ms';
-      $('stStatus').textContent = 'скачивание...';
+    if(bestPattern){
+      pattern=bestPattern; draw(pattern);
+      $('stStd').textContent=bestStd.toFixed(4)+' ms';
+      $('stStatus').textContent='скачивание...';
       setProgress(100);
       downloadBin(pattern);
-      log('Автоскачивание adaptive_chameleon_pattern.bin', 'ok');
-      $('stStatus').textContent = 'готов';
-      $('btnDownload').disabled = false;
-    } else {
-      $('stStatus').textContent = 'ошибка';
-      log('Нет результата', 'bad');
+      log('Автоскачивание adaptive_chameleon_pattern.bin','ok');
+      $('stStatus').textContent='готов';
+      $('btnDownload').disabled=false;
+    }else{
+      $('stStatus').textContent='ошибка';
+      log('Нет результата','bad');
     }
 
-    $('btnStart').disabled = false;
-    $('btnStop').disabled = true;
-    active = false;
+    $('btnStart').disabled=false;
+    $('btnStop').disabled=true;
+    active=false;
   }
 
-  function stop() {
-    active = false;
-    $('stStatus').textContent = pattern ? 'остановлен' : 'стоп';
-    $('btnStart').disabled = false;
-    $('btnStop').disabled = true;
-    if (pattern) $('btnDownload').disabled = false;
+  function stop(){
+    active=false;
+    $('stStatus').textContent=pattern?'остановлен':'стоп';
+    $('btnStart').disabled=false;
+    $('btnStop').disabled=true;
+    if(pattern) $('btnDownload').disabled=false;
     log('Стоп');
   }
 
-  $('btnStart').onclick = () => runSmart().catch(e => {
-    active = false;
-    log(String(e), 'bad');
-    $('btnStart').disabled = false;
-    $('btnStop').disabled = true;
+  $('btnStart').onclick=()=>runSmart().catch(e=>{
+    active=false; log(String(e),'bad');
+    $('btnStart').disabled=false; $('btnStop').disabled=true;
   });
-  $('btnStop').onclick = stop;
-  $('btnDownload').onclick = () => {
-    if (!pattern) return;
+  $('btnStop').onclick=stop;
+  $('btnDownload').onclick=()=>{
+    if(!pattern) return;
     downloadBin(pattern);
-    log('Повторное скачивание', 'ok');
+    log('Повторное скачивание','ok');
   };
 
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,cv.width,cv.height);
 })();
 </script>
 </body>
