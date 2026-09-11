@@ -452,18 +452,27 @@
 // Динамическая перестройка паттерна в RAM (модель переменной ёмкости).
 // НЕ радиоантенна и НЕ RF из ячеек SRAM.
 
+// AdaptivePattern_MinJitter.ino
+// Цель: уменьшить измеряемый джиттер интервалов micros()
+// за счёт подстройки паттерна в RAM.
+
 #include <Arduino.h>
 
-static const uint16_t PAT_LEN = 512;
+static const uint16_t PAT_LEN = 512;   // Uno OK; ESP32 можно 2048+
 static uint8_t pattern[PAT_LEN];
 
-static float Cmodel = 1.0f;
-static float Vmodel = 0.0f;
-static float adaptGain = 1.0f;
-static uint32_t seed = 0xC0FFEEu;
+struct Params {
+  float C;       // сглаживание
+  float V;       // фаза
+  float adapt;   // усиление
+  uint32_t seed;
+};
+
+static Params cur   = {1.0f, 0.0f, 1.0f, 0xC0FFEEu};
+static Params best  = {1.0f, 0.0f, 1.0f, 0xC0FFEEu};
+static float  bestJ = 1e9f;
 static uint16_t stepId = 0;
-static float bestJitter = 1e9f;
-static uint8_t noImprove = 0;
+static uint8_t stagnant = 0;
 
 static uint32_t mix32(uint32_t x) {
   x += 0x9E3779B9u;
@@ -472,12 +481,24 @@ static uint32_t mix32(uint32_t x) {
   return x ^ (x >> 16);
 }
 
-float measureJitter(uint16_t samples = 160) {
+// Джиттер = СКО интервалов между последовательными micros()
+float measureJitterUs(uint16_t samples = 240) {
   uint32_t prev = micros();
+  // короткий прогрев
+  for (uint16_t i = 0; i < 30; i++) {
+    volatile uint32_t s = mix32(i);
+    (void)s;
+    prev = micros();
+  }
+
   float sum = 0, sum2 = 0;
+  prev = micros();
   for (uint16_t i = 0; i < samples; i++) {
-    volatile uint32_t sink = mix32(i ^ seed);
+    // фиксированная лёгкая работа между отсчётами
+    volatile uint32_t sink = mix32(i ^ cur.seed);
+    sink ^= pattern[i & (PAT_LEN - 1)];
     (void)sink;
+
     uint32_t now = micros();
     float d = (float)(now - prev);
     prev = now;
@@ -490,78 +511,124 @@ float measureJitter(uint16_t samples = 160) {
   return sqrt(var);
 }
 
-void rebuildPattern(float C, float V, float adapt, uint32_t s, uint16_t step) {
-  uint32_t s1 = mix32(0xDEADBEEFu ^ s ^ (step * 0x9E37u));
-  uint32_t s2 = mix32(0x12345679u ^ s ^ step);
-  float prev = V * 0.01f;
-  float smooth = constrain(0.55f + 0.35f * C, 0.55f, 0.92f);
-  float drive  = constrain(1.25f - 0.35f * C, 0.55f, 1.20f);
+void rebuildPattern(const Params& p, uint16_t step) {
+  uint32_t s1 = mix32(0xDEADBEEFu ^ p.seed ^ (step * 0x9E37u));
+  uint32_t s2 = mix32(0x12345679u ^ p.seed ^ step);
+  float prev = p.V * 0.01f;
+  float smooth = constrain(0.50f + 0.40f * p.C, 0.50f, 0.93f);
+  float drive  = constrain(1.30f - 0.40f * p.C, 0.50f, 1.25f);
 
   for (uint16_t i = 0; i < PAT_LEN; i++) {
     s1 = mix32(s1 + i);
     s2 = mix32(s2 + i * 0x9E37u);
-    float theta = (2.0f * 3.1415926f * 1.6180339f * i) / 256.0f
-                + step * 0.01f + V * 0.001f;
+
+    float theta = (2.0f * 3.1415926f * 1.6180339f * (float)i) / 256.0f
+                + step * 0.01f + p.V * 0.001f;
+
     float cpu = sinf(2.0f * 3.1415926f * i / 64.0f + theta * 0.15f);
     float ram = sinf(2.0f * 3.1415926f * i / 128.0f + theta * 0.07f);
     float a = cosf(theta * 0.19f * drive);
-    float b = sinf(theta * 0.41f + 1.17f + V * 0.01f);
-    float I = (a * a + b * b) * 0.5f;
+    float b = sinf(theta * 0.41f + 1.17f + p.V * 0.01f);
+    float I = 0.5f * (a * a + b * b);
     float suppress = I < 0.55f ? (0.55f - I) : 0.0f;
     float damp = I > 0.45f ? (I - 0.45f) : 0.0f;
-    float raw = adapt * (0.22f * cpu + 0.18f * ram + 0.16f * a + 0.12f * b)
-              - 0.12f * suppress * adapt
-              - 0.10f * damp * adapt
+
+    float raw = p.adapt * (0.22f * cpu + 0.18f * ram + 0.16f * a + 0.12f * b)
+              - 0.12f * suppress * p.adapt
+              - 0.10f * damp * p.adapt
               + 0.05f * ((s1 & 255) / 255.0f)
               + 0.04f * ((s2 & 255) / 255.0f);
+
     raw = tanhf(raw * drive);
     float v = raw * (1.0f - smooth) + prev * smooth;
     prev = v;
+
     int val = (int)floorf((v + 1.0f) * 127.5f) % 256;
     if (val < 0) val += 256;
     pattern[i] = (uint8_t)val;
   }
 }
 
-uint8_t switchChargePasses() {
-  uint8_t acc = 0;
-  for (uint16_t i = 0; i < PAT_LEN; i += 8) acc ^= pattern[i];
-  for (uint16_t i = 0; i < PAT_LEN; i += 17) acc += pattern[i];
-  for (uint16_t i = 0; i < PAT_LEN; i += 31) acc ^= pattern[i] << 1;
-  return acc;
+// Небольшой «touch» буфера — часть нагрузки между тактами
+void touchPattern() {
+  volatile uint8_t acc = 0;
+  for (uint16_t i = 0; i < PAT_LEN; i += 16) acc ^= pattern[i];
+  (void)acc;
+}
+
+// Случайный шаг поиска вокруг текущих лучших параметров
+Params proposeCandidate(const Params& base, uint8_t mode) {
+  Params p = base;
+  // детерминированный «рандом» от micros
+  uint32_t r = mix32(micros() ^ base.seed ^ mode);
+  float n1 = ((r & 255) / 255.0f) * 2.0f - 1.0f;
+  float n2 = (((r >> 8) & 255) / 255.0f) * 2.0f - 1.0f;
+  float n3 = (((r >> 16) & 255) / 255.0f) * 2.0f - 1.0f;
+
+  // разные режимы поиска
+  float scale = (mode % 3 == 0) ? 0.08f : (mode % 3 == 1) ? 0.18f : 0.35f;
+  p.C     = constrain(base.C + n1 * scale, 0.55f, 1.90f);
+  p.V     = base.V + n2 * (5.0f + 20.0f * scale);
+  p.adapt = constrain(base.adapt + n3 * scale * 0.5f, 0.65f, 1.80f);
+  if ((r & 7) == 0) p.seed ^= mix32(micros());
+  return p;
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(250);
-  Serial.println(F("Cap-model dynamic pattern (not an RF antenna)"));
-  seed = (uint32_t)micros() ^ 0xA5A5u;
-  rebuildPattern(Cmodel, Vmodel, adaptGain, seed, stepId);
+  delay(300);
+  Serial.println(F("Min-jitter adaptive pattern"));
+
+  cur.seed = micros() ^ 0xA5A5u;
+  rebuildPattern(cur, stepId);
+  touchPattern();
+  bestJ = measureJitterUs(280);
+  best = cur;
+  Serial.print(F("initial j="));
+  Serial.println(bestJ, 4);
 }
 
 void loop() {
-  float j = measureJitter(160);
-  seed ^= (uint32_t)(j * 1000.0f) ^ micros();
-  Cmodel = constrain(0.8f + j * 0.08f + noImprove * 0.04f, 0.6f, 1.8f);
-  Vmodel += (j - 1.0f) * 0.15f;
-  if (Vmodel > 1000) Vmodel -= 1000;
-  if (Vmodel < -1000) Vmodel += 1000;
-  adaptGain = constrain(1.0f + j * 0.04f, 0.7f, 1.6f);
+  // 1) кандидат параметров
+  Params cand = proposeCandidate(best, stagnant);
   stepId++;
-  rebuildPattern(Cmodel, Vmodel, adaptGain, seed, stepId);
-  volatile uint8_t sink = switchChargePasses();
-  (void)sink;
-  if (j + 0.02f < bestJitter) { bestJitter = j; noImprove = 0; }
-  else noImprove++;
-  if (noImprove >= 6) {
-    seed ^= micros() ^ 0x5A5Au;
-    Vmodel *= -0.5f;
-    noImprove = 0;
+  rebuildPattern(cand, stepId);
+  touchPattern();
+
+  // 2) замер джиттера после новой конфигурации
+  float j = measureJitterUs(240);
+
+  // 3) если лучше — принимаем
+  if (j + 0.005f < bestJ) {
+    bestJ = j;
+    best = cand;
+    cur = cand;
+    stagnant = 0;
+    Serial.print(F("IMPROVED j="));
+    Serial.print(bestJ, 4);
+    Serial.print(F(" C="));
+    Serial.print(best.C, 2);
+    Serial.print(F(" A="));
+    Serial.println(best.adapt, 2);
+  } else {
+    // откат к лучшему
+    cur = best;
+    rebuildPattern(cur, stepId);
+    stagnant++;
+    Serial.print(F("reject j="));
+    Serial.print(j, 4);
+    Serial.print(F(" best="));
+    Serial.println(bestJ, 4);
   }
-  Serial.print(F("j=")); Serial.print(j, 3);
-  Serial.print(F(" C=")); Serial.print(Cmodel, 2);
-  Serial.print(F(" V=")); Serial.println(Vmodel, 1);
-  delay(40);
+
+  // 4) если долго нет улучшения — сильнее встряхнуть seed
+  if (stagnant >= 8) {
+    best.seed ^= mix32(micros() ^ 0x5A5Au);
+    stagnant = 0;
+    Serial.println(F("reseed best"));
+  }
+
+  delay(20);
 }
 `;
   }
