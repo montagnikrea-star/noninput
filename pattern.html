@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Pattern — System-Wide Gates</title>
+  <title>AI Pattern — System Gates + Interference Lattice</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -61,10 +61,11 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>AI Pattern · System-Wide Gates</h1>
+    <h1>AI Pattern · System Gates + Interference Lattice</h1>
     <div class="sub">
-      Масштабы: CPU 64B · RAM 4K · SSD 64K/1MB · PCIe-like 256B · NET MTU 1500 · TCP 64K · SYS 4MB.
-      Структурное согласование данных. AI · live · BH repair · RAM/Storage check · автосохранение.
+      systemWideGates + interference lattice (minima=suppress, maxima=damp) ·
+      AI · BH repair · live · RAM/Storage · автосохранение · без лимита размера.
+      Математика данных, не управление радиоволнами или железом.
     </div>
 
     <div class="card">
@@ -117,7 +118,7 @@
         <div class="stat">CPU touch<b id="stCpu">нет</b></div>
         <div class="stat">GPU<b id="stGpu">нет</b></div>
         <div class="stat">Диск<b id="stDisk">нет</b></div>
-        <div class="stat">Gates<b id="stGates">SYS-WIDE</b></div>
+        <div class="stat">Lattice<b id="stLat">ON</b></div>
       </div>
     </div>
 
@@ -134,14 +135,8 @@
   const ctx = cv.getContext('2d', { alpha: false });
   const logEl = $('log');
 
-  const G_CPU   = 64;
-  const G_RAM   = 4096;
-  const G_SSD   = 65536;
-  const G_SSD1M = 1048576;
-  const G_PCIE  = 256;
-  const G_NET   = 1500;
-  const G_TCP   = 65535;
-  const G_SYS   = 1048576 * 4;
+  const G_CPU = 64, G_RAM = 4096, G_SSD = 65536, G_SSD1M = 1048576;
+  const G_PCIE = 256, G_NET = 1500, G_TCP = 65535, G_SYS = 1048576 * 4;
 
   const _k0 = 0x0595E8FA;
   const _k1 = 93690930;
@@ -289,24 +284,46 @@
     const net  = Math.sin(2*Math.PI*i/G_NET   + theta*0.05);
     const tcp  = Math.sin(2*Math.PI*i/G_TCP   + theta*0.02);
     const sys  = Math.sin(2*Math.PI*i/G_SYS   + theta*0.005);
-
     const l1 = Math.sin(2*Math.PI*i/G_CPU  + 2*Math.PI*i/G_RAM);
     const l2 = Math.sin(2*Math.PI*i/G_RAM  + 2*Math.PI*i/G_SSD);
     const l3 = Math.sin(2*Math.PI*i/G_SSD  + 2*Math.PI*i/G_NET);
     const l4 = Math.sin(2*Math.PI*i/G_PCIE + 2*Math.PI*i/G_CPU);
     const l5 = Math.sin(2*Math.PI*i/G_NET  + 2*Math.PI*i/G_TCP);
     const l6 = Math.sin(2*Math.PI*i/G_SYS  + 2*Math.PI*i/G_RAM);
-
     const nx = Math.sin(2*Math.PI*((i + _k1) % (_k1 || 1)) / (_k1 + 17) + theta * 0.013);
     const ny = Math.cos(2*Math.PI*(i ^ _k0) / ((_k2 & 0xFFFF) + 97) - theta * 0.009);
     const nz = Math.sin((i * _k3) * 2.3283064e-10 + theta * 0.021);
-
     return adapt * (
-      0.13*cpu + 0.11*ram + 0.09*ssd + 0.06*ssdB +
-      0.08*pcie + 0.08*net + 0.06*tcp + 0.05*sys +
-      0.05*l1 + 0.04*l2 + 0.04*l3 + 0.03*l4 + 0.03*l5 + 0.03*l6 +
-      0.04*nx + 0.04*ny + 0.04*nz
+      0.12*cpu + 0.10*ram + 0.08*ssd + 0.05*ssdB +
+      0.07*pcie + 0.07*net + 0.05*tcp + 0.04*sys +
+      0.04*l1 + 0.04*l2 + 0.03*l3 + 0.03*l4 + 0.03*l5 + 0.02*l6 +
+      0.03*nx + 0.03*ny + 0.03*nz
     );
+  }
+
+  function interferenceLattice(i, theta, adapt, histNorm) {
+    const sources = [
+      { a: 1.00, w: 0.07, p: 0.00 },
+      { a: 0.85, w: 0.19, p: 1.17 },
+      { a: 0.70, w: 0.41, p: 2.09 },
+      { a: 0.55, w: 0.93, p: 0.61 },
+      { a: 0.40, w: 1.70, p: 2.70 }
+    ];
+    const h = histNorm && histNorm.length ? histNorm[i % histNorm.length] : 0.04;
+    let re = 0, im = 0;
+    for (let k = 0; k < sources.length; k++) {
+      const s = sources[k];
+      const phase = s.w * theta + s.p + h * 0.8 + (i * (0.002 + k * 0.0007));
+      re += s.a * Math.cos(phase);
+      im += s.a * Math.sin(phase);
+    }
+    const I = re * re + im * im;
+    const In = I / (sources.length * sources.length);
+    const suppress = Math.max(0, 0.55 - In);
+    const damp = Math.max(0, In - 0.45);
+    const lattice = Math.tanh((re * 0.6 + im * 0.4) * 0.8);
+    const out = lattice * 0.55 * adapt - suppress * 0.35 * adapt - damp * 0.25 * adapt;
+    return { out, In, suppress, damp };
   }
 
   async function measureJitter(samples=1000) {
@@ -355,7 +372,7 @@
     const base = [0.025, 0.07, 0.18, 0.5, 1.2, 3.0, 7.5, 14, 22];
     const freq = base.map((f,i)=>f*(1+(jp.histNorm[i%jp.histNorm.length]-1/base.length)*jp.chaos));
     const block = Math.max(8192, (bytes / 40) | 0);
-    let holeAcc = 0, spikeAcc = 0;
+    let holeAcc = 0, spikeAcc = 0, supAcc = 0, dampAcc = 0;
 
     return {
       generate: async function () {
@@ -373,8 +390,9 @@
           const t128 = Math.sin((2 * PI * i) / (256 / 128));
           const t64  = Math.sin((2 * PI * i) / (256 / 64));
           const gates = systemWideGates(i, theta, adapt);
+          const ifx = interferenceLattice(i, theta, adapt, jp.histNorm);
 
-          const local = 0.30 * waves + 0.14 * t128 + 0.10 * t64 + 0.46 * gates;
+          const local = 0.24 * waves + 0.12 * t128 + 0.08 * t64 + 0.28 * gates + 0.28 * ifx.out;
           const coherence = Math.min(1, Math.abs(local - prev));
           const antiAttract = (1 - coherence) * (0.65 + 0.35 * jp.attractPenalty) * adapt;
           prev = local;
@@ -384,27 +402,32 @@
 
           const br = ((i * _k3) >>> 0) & 255;
           const bd = ((s1 ^ _k2 ^ (i * 0x45D9F3B)) >>> 0) & 255;
-          const breakL = ((br / 255) - 0.5) * 0.08;
-          const breakD = ((bd / 255) - 0.5) * 0.06;
 
           let raw =
-            0.07 * waves +
+            0.06 * waves +
             0.03 * t128 +
             0.03 * t64 +
-            0.20 * gates +
-            0.12 * dissipate +
-            0.11 * antiShunt +
-            0.11 * antiAttract +
-            0.06 * Math.sin(theta * (0.15 + jp.std * 3)) +
-            0.05 * ((s1 & 255) / 255) +
+            0.14 * gates +
+            0.14 * ifx.out +
+            0.10 * dissipate +
+            0.09 * antiShunt +
+            0.09 * antiAttract +
+            0.05 * Math.sin(theta * (0.15 + jp.std * 3)) +
+            0.04 * ((s1 & 255) / 255) +
             0.04 * ((s2 & 255) / 255) +
-            breakL + breakD;
+            ((br / 255) - 0.5) * 0.06 +
+            ((bd / 255) - 0.5) * 0.05;
+
+          raw *= (1 - 0.20 * ifx.suppress);
+          raw = raw * (1 - 0.12 * ifx.damp) + runMean * Math.sign(raw || 1) * 0.12 * ifx.damp;
 
           runMean = runMean * 0.995 + Math.abs(raw) * 0.005;
           const bh = blackHoleCalmRepair(raw, prevRaw, runMean);
           prevRaw = bh.out;
           holeAcc += bh.holeRisk;
           spikeAcc += bh.spikeRisk;
+          supAcc += ifx.suppress;
+          dampAcc += ifx.damp;
 
           let val = Math.floor(((bh.out + 1) * 127.5) % 256);
           if (val < 0) val += 256;
@@ -418,7 +441,14 @@
           }
         }
         drawPattern(out, 1);
-        return { data: out, holeAvg: holeAcc / Math.max(1, bytes), spikeAvg: spikeAcc / Math.max(1, bytes) };
+        const n = Math.max(1, bytes);
+        return {
+          data: out,
+          holeAvg: holeAcc / n,
+          spikeAvg: spikeAcc / n,
+          suppressAvg: supAcc / n,
+          dampAvg: dampAcc / n
+        };
       }
     };
   }
@@ -484,9 +514,9 @@
     setProgress(0);
     ctx.fillStyle = '#000'; ctx.fillRect(0,0,cv.width,cv.height);
     $('stDisk').textContent = 'нет';
-    $('stGates').textContent = 'SYS-WIDE';
+    $('stLat').textContent = 'ON';
 
-    log(`AI-старт: ${mb} МБ | system-wide gates ON`);
+    log(`AI-старт: ${mb} МБ | gates + interference lattice`);
     if (mb >= 64) log('Большой размер: возможен OOM', 'warn');
 
     const pre = await checkRamAndStorage(bytes);
@@ -519,6 +549,7 @@
       pattern = result.data;
       $('stRam').textContent = mb + ' МБ';
       log(`  BH hole=${result.holeAvg.toFixed(4)} spike=${result.spikeAvg.toFixed(4)}`);
+      log(`  lattice suppress=${result.suppressAvg.toFixed(4)} damp=${result.dampAvg.toFixed(4)}`);
       startTouch();
       await animateFormation(pattern);
       await uploadGpu(pattern);
@@ -565,7 +596,7 @@
 
       $('stStatus').textContent = 'готов';
       $('btnDownload').disabled = false;
-      log(`Готово. σ=${bestStd.toFixed(4)} | system-wide gates`, 'ok');
+      log(`Готово. σ=${bestStd.toFixed(4)} | gates + lattice`, 'ok');
     } else {
       $('stStatus').textContent = 'ошибка';
       log('Паттерн не сформирован', 'bad');
