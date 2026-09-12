@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Pattern — Unlimited · USB · Arduino MatchWaves</title>
+  <title>Smart Pattern — Breakwater · Unlimited · Arduino</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
   <style>
     :root {
@@ -19,41 +19,19 @@
     .wrap{max-width:960px;margin:0 auto;padding:18px 14px 40px}
     h1{font-size:1.12rem;margin:0 0 6px}
     .sub{color:var(--muted);font-size:12px;line-height:1.45;margin-bottom:12px}
-    .card{
-      background:var(--card);border:1px solid #262c3a;border-radius:14px;
-      padding:12px 14px;margin-bottom:12px
-    }
+    .card{background:var(--card);border:1px solid #262c3a;border-radius:14px;padding:12px 14px;margin-bottom:12px}
     .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-    button{
-      border:0;border-radius:10px;padding:10px 12px;background:var(--accent);
-      color:#0b1020;font-weight:600;cursor:pointer
-    }
+    button{border:0;border-radius:10px;padding:10px 12px;background:var(--accent);color:#0b1020;font-weight:600;cursor:pointer}
     button.secondary{background:#2a3142;color:var(--text)}
     button:disabled{opacity:.45;cursor:not-allowed}
-    .grid{
-      display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
-      gap:8px;margin-top:8px
-    }
-    .stat{
-      background:#0f131b;border:1px solid #242a36;border-radius:10px;padding:8px 10px
-    }
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px}
+    .stat{background:#0f131b;border:1px solid #242a36;border-radius:10px;padding:8px 10px}
     .stat b{display:block;margin-top:3px;font-size:.86rem}
     label{font-size:12px;color:var(--muted)}
-    select,input[type=number]{
-      width:100%;margin-top:5px;background:#0f131b;color:var(--text);
-      border:1px solid #2a2f3a;border-radius:8px;padding:8px
-    }
-    .view-wrap{
-      border-radius:12px;overflow:hidden;border:1px solid #2a2f3a;
-      background:#000;aspect-ratio:2/1;
-    }
+    select,input[type=number]{width:100%;margin-top:5px;background:#0f131b;color:var(--text);border:1px solid #2a2f3a;border-radius:8px;padding:8px}
+    .view-wrap{border-radius:12px;overflow:hidden;border:1px solid #2a2f3a;background:#000;aspect-ratio:2/1}
     canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
-    .log{
-      font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;
-      white-space:pre-wrap;background:#0c0e13;border:1px solid #242a36;
-      border-radius:10px;padding:10px;min-height:120px;max-height:190px;
-      overflow:auto;color:#c9d1d9
-    }
+    .log{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;white-space:pre-wrap;background:#0c0e13;border:1px solid #242a36;border-radius:10px;padding:10px;min-height:120px;max-height:190px;overflow:auto;color:#c9d1d9}
     .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
     .bar{height:7px;background:#0c0e13;border-radius:99px;overflow:hidden;margin-top:10px}
     .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7aa2ff,#3dd68c)}
@@ -61,11 +39,10 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Smart Pattern · Unlimited size · Arduino MatchWaves</h1>
+    <h1>Smart Pattern · Breakwater · Unlimited · Arduino</h1>
     <div class="sub">
-      Размер .bin в коде не ограничен (лимит только ОЗУ браузера).
-      Arduino .ino (match-waves, min-jitter) скачивается всегда.
-      .bin / USB — после генерации.
+      Структура «волнореза» успокаивает колебания в данных. Размер .bin без верхней границы в коде.
+      Arduino MatchWaves+Breakwater — скачать всегда. Модель буфера, не физика моря/RF.
     </div>
 
     <div class="card">
@@ -150,45 +127,31 @@
   let gpuDevice=null, gpuPipeline=null, gpuReady=false;
 
   const log=(m,c='')=>{
-    const d=document.createElement('div');
-    if(c) d.className=c;
+    const d=document.createElement('div'); if(c) d.className=c;
     d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;
     logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight;
   };
   const setProgress=p=>{ $('progress').style.width=Math.max(0,Math.min(100,p))+'%'; };
-  const enablePatternDownloads=on=>{
-    $('btnBin').disabled=!on;
-    $('btnUsb').disabled=!on;
-  };
+  const enablePatternDownloads=on=>{ $('btnBin').disabled=!on; $('btnUsb').disabled=!on; };
 
   function pickSizeMb(){
     const mode=$('sizeMode').value;
-    if(mode==='custom'){
-      const v=parseInt($('customMb').value,10);
-      return Math.max(1, v||1); // без верхней границы в коде
-    }
+    if(mode==='custom') return Math.max(1, parseInt($('customMb').value,10)||1);
     if(mode==='auto'){
       const dm=navigator.deviceMemory;
       if(!dm) return 32;
-      if(dm>=32) return 256;
-      if(dm>=16) return 128;
-      if(dm>=8) return 64;
-      if(dm>=4) return 32;
-      return 16;
+      if(dm>=32) return 256; if(dm>=16) return 128; if(dm>=8) return 64; if(dm>=4) return 32; return 16;
     }
     return Math.max(1, parseInt(mode,10)||2);
   }
-
   $('memHint').textContent = navigator.deviceMemory
-    ? `deviceMemory ≈ ${navigator.deviceMemory} ГБ (для Авто)`
-    : 'deviceMemory n/a — Авто = 32 МБ';
+    ? `deviceMemory ≈ ${navigator.deviceMemory} ГБ` : 'deviceMemory n/a — Авто=32 МБ';
 
   function draw(buf){
     if(!buf?.length) return;
     const w=cv.width,h=cv.height,total=w*h,len=buf.length,data=imgData.data;
     for(let p=0;p<total;p++){
-      const v=buf[((p*len/total)|0)%len];
-      const o=p*4;
+      const v=buf[((p*len/total)|0)%len], o=p*4;
       data[o]=Math.min(255,(v*1.25)|0);
       data[o+1]=Math.min(255,(v*0.75+35)|0);
       data[o+2]=Math.min(255,((255-v)*0.9+25)|0);
@@ -205,8 +168,7 @@
       const n=performance.now(); d[i]=n-prev; prev=n;
       if((i&127)===0) await new Promise(r=>setTimeout(r,0));
     }
-    let sum=0,sum2=0;
-    for(let i=0;i<samples;i++){sum+=d[i];sum2+=d[i]*d[i];}
+    let sum=0,sum2=0; for(let i=0;i<samples;i++){sum+=d[i];sum2+=d[i]*d[i];}
     const mean=sum/samples, std=Math.sqrt(Math.max(0,sum2/samples-mean*mean));
     let seed=(Math.floor(mean*1e6)^Math.floor(std*1e7))>>>0;
     seed=Math.imul(seed^(seed>>>16),0x7feb352d)>>>0;
@@ -249,6 +211,22 @@
     return Math.tanh(Math.sqrt(re*re+im*im)/N*2)*adapt;
   }
 
+  // Волнорез: ступени дробят рябь, гавань успокаивает
+  function breakwaterCalm(i, length, raw, runMean) {
+    const x = (i % length) / length;
+    const step1 = Math.max(0, Math.min(1, (x - 0.10) / 0.20));
+    const step2 = Math.max(0, Math.min(1, (x - 0.30) / 0.20));
+    const step3 = Math.max(0, Math.min(1, (x - 0.50) / 0.15));
+    const crest = Math.max(0, 1 - Math.abs(x - 0.62) / 0.08);
+    const harbor = Math.max(0, (x - 0.72) / 0.28);
+    const breakK = 0.25 * step1 + 0.35 * step2 + 0.45 * step3 + 0.55 * crest;
+    const calmK  = 0.15 + 0.70 * harbor;
+    const ripple = raw - Math.tanh(runMean) * Math.sign(raw || 1);
+    const broken = raw - breakK * 0.65 * ripple;
+    const calmed = broken * (1 - calmK * 0.55) + runMean * Math.sign(broken || 1) * calmK * 0.55;
+    return Math.tanh(calmed);
+  }
+
   function generateCPU(bytes,seed,adapt,step){
     const out=new Uint8Array(bytes);
     let s1=(0xDEADBEEF^seed^(step*0x9E3779B9))>>>0, s2=(0x12345679^seed^step)>>>0;
@@ -265,6 +243,7 @@
       raw=raw*(1-0.11*ifx.damp)+runMean*Math.sign(raw||1)*0.11*ifx.damp;
       raw=Math.tanh(raw);
       runMean=runMean*0.995+Math.abs(raw)*0.005;
+      raw=breakwaterCalm(i, 4096, raw, runMean);
       const hole=Math.max(0,(runMean-Math.abs(raw))/(runMean+1e-6));
       const spike=Math.max(0,(Math.abs(raw)-runMean*1.8)/(Math.abs(raw)+1e-6));
       let v=raw*(1-0.3*spike)+runMean*Math.sign(raw||1)*0.3*spike;
@@ -275,6 +254,7 @@
     return out;
   }
 
+  // GPU: упрощённый волнорез в шейдере
   const SHADER=`
     struct Params { seed:u32, adapt_bits:u32, step:u32, size:u32, };
     @group(0) @binding(0) var<storage, read_write> outBuf: array<u32>;
@@ -299,15 +279,28 @@
       let suppress=max(0.0,0.55-In); let dampv=max(0.0,In-0.45);
       let lattice=tanh((re0*0.6+im0*0.4)*0.5);
       let ifx=lattice*0.55*adapt-suppress*0.35*adapt-dampv*0.25*adapt;
-      var re=0.0; var im=0.0; let x=fi*0.001; let y=sin(fi*0.00017)*1000.0; let z=cos(fi*0.00031)*1000.0;
+      var re=0.0; var im=0.0; let xw=fi*0.001; let yw=sin(fi*0.00017)*1000.0; let zw=cos(fi*0.00031)*1000.0;
       for(var k=0u; k<12u; k=k+1u){
         let t=f32(k)/11.0; let f=1e-6*pow(1e18/1e-6,t);
-        let phase=f*1e-12*x+f*1e-15*y+f*1e-18*z+f32(k)*0.37;
+        let phase=f*1e-12*xw+f*1e-15*yw+f*1e-18*zw+f32(k)*0.37;
         let amp=1.0/(1.0+f32(k)*0.08); re=re+amp*cos(phase); im=im+amp*sin(phase);
       }
       let uws=tanh(sqrt(re*re+im*im)/12.0*2.0)*adapt;
       var raw=0.10*gates+0.11*ifx+0.12*uws+0.04*f32(s1&255u)/255.0+0.03*f32(s2&255u)/255.0;
       raw=raw*(1.0-0.16*suppress); raw=tanh(raw);
+      // breakwater profile period 4096
+      let x= (fi % 4096.0) / 4096.0;
+      let step1=clamp((x-0.10)/0.20,0.0,1.0);
+      let step2=clamp((x-0.30)/0.20,0.0,1.0);
+      let step3=clamp((x-0.50)/0.15,0.0,1.0);
+      let crest=max(0.0,1.0-abs(x-0.62)/0.08);
+      let harbor=max(0.0,(x-0.72)/0.28);
+      let breakK=0.25*step1+0.35*step2+0.45*step3+0.55*crest;
+      let calmK=0.15+0.70*harbor;
+      let ripple=raw-0.15*sign(raw);
+      raw=raw-breakK*0.65*ripple;
+      raw=raw*(1.0-calmK*0.55)+0.15*sign(raw)*calmK*0.55;
+      raw=tanh(raw);
       var val=i32(floor(((raw+1.0)*127.5)%256.0)); if(val<0){ val=val+256; }
       outBuf[i]=u32(val)&255u;
     }
@@ -322,9 +315,7 @@
       const module=gpuDevice.createShaderModule({code:SHADER});
       gpuPipeline=gpuDevice.createComputePipeline({layout:'auto', compute:{module, entryPoint:'main'}});
       gpuReady=true; $('stBackend').textContent='WebGPU'; log('WebGPU готов','ok'); return true;
-    }catch(e){
-      gpuReady=false; $('stBackend').textContent='CPU'; log('GPU: '+e.message,'warn'); return false;
-    }
+    }catch(e){ gpuReady=false; $('stBackend').textContent='CPU'; log('GPU: '+e.message,'warn'); return false; }
   }
 
   async function generateGPU(bytes,seed,adapt,step){
@@ -359,32 +350,27 @@
   }
 
   const scoreOf=std=>1000/(1+std*100);
-
   function downloadBlob(data,filename,type){
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([data],{type:type||'application/octet-stream'}));
     a.download=filename; a.click(); URL.revokeObjectURL(a.href);
   }
   function downloadBin(buf){ downloadBlob(buf,'adaptive_chameleon_pattern.bin'); }
-
   function buildFlashFriendlyImage(patternBytes){
     const page=4096, block=131072;
     const header=new Uint8Array(64);
     header.set(new TextEncoder().encode('ACPFLASH1'),0);
     const dv=new DataView(header.buffer);
     dv.setUint32(8,page,true); dv.setUint32(12,block,true); dv.setUint32(16,patternBytes.length,true);
-    const rawLen=64+patternBytes.length;
-    const total=Math.ceil(rawLen/block)*block;
-    const out=new Uint8Array(total);
-    out.set(header,0); out.set(patternBytes,64);
+    const rawLen=64+patternBytes.length, total=Math.ceil(rawLen/block)*block;
+    const out=new Uint8Array(total); out.set(header,0); out.set(patternBytes,64);
     for(let i=rawLen;i<total;i++) out[i]=(patternBytes[(i-64)%patternBytes.length]^0xA5)&255;
     return out;
   }
   function downloadUsb(buf){ downloadBlob(buildFlashFriendlyImage(buf),'pattern_usb_flash.bin'); }
 
-  // Arduino MatchWaves (min-jitter + matched spectrum, no self-shunt)
   function buildArduinoSketch(){
-    return `// AdaptivePattern_MatchWaves.ino
+    return `// AdaptivePattern_MatchWaves_Breakwater.ino
 #include <Arduino.h>
 static const uint16_t PAT_LEN = 512;
 static const uint8_t N_WAVES = 12;
@@ -406,12 +392,8 @@ static float matchedWaveSpectrum(uint16_t i, float adapt){
   for(uint8_t k=0;k<N_WAVES;k++){
     float lam=wavelengthAt(k);
     float phase=2.0f*3.1415926f*(float)i/lam;
-    if(k>0){
-      float d=phase-prevPhase;
-      while(d>3.1415926f) d-=6.2831853f;
-      while(d<-3.1415926f) d+=6.2831853f;
-      phase-=0.25f*d;
-    }
+    if(k>0){ float d=phase-prevPhase;
+      while(d>3.1415926f) d-=6.2831853f; while(d<-3.1415926f) d+=6.2831853f; phase-=0.25f*d; }
     prevPhase=phase;
     float amp=1.0f/(1.0f+0.10f*(float)k);
     re+=amp*cosf(phase); im+=amp*sinf(phase);
@@ -420,6 +402,18 @@ static float matchedWaveSpectrum(uint16_t i, float adapt){
   float out=tanhf(mag*1.4f);
   if(out<0.08f) out=0.08f+out*0.5f;
   return out*adapt;
+}
+static float breakwaterCalm(uint16_t i, float raw, float prev){
+  float x=(float)(i & 127)/128.0f;
+  float step=constrain((x-0.15f)/0.35f,0.0f,1.0f);
+  float crest=max(0.0f,1.0f-fabsf(x-0.55f)/0.10f);
+  float harbor=constrain((x-0.65f)/0.35f,0.0f,1.0f);
+  float breakK=0.4f*step+0.5f*crest;
+  float calmK=0.2f+0.6f*harbor;
+  float ripple=raw-prev;
+  raw=raw-breakK*0.6f*ripple;
+  raw=raw*(1.0f-calmK*0.5f)+prev*calmK*0.5f;
+  return tanhf(raw);
 }
 float measureJitterUs(uint16_t samples=240){
   uint32_t prev=micros();
@@ -450,6 +444,7 @@ void rebuildPattern(const Params& p, uint16_t step){
     float raw=p.adapt*(0.14f*cpu+0.12f*ram+0.10f*a+0.08f*b)+0.26f*waves+0.08f*matchPull
              -0.04f*damp*p.adapt+0.04f*((s1&255)/255.0f)+0.03f*((s2&255)/255.0f);
     raw=tanhf(raw*drive);
+    raw=breakwaterCalm(i, raw, prev);
     float v=raw*(1.0f-smooth)+prev*smooth; prev=v;
     int val=(int)floorf((v+1.0f)*127.5f)%256; if(val<0) val+=256;
     pattern[i]=(uint8_t)val;
@@ -468,7 +463,7 @@ Params proposeCandidate(const Params& base, uint8_t mode){
 }
 void setup(){
   Serial.begin(115200); delay(300);
-  Serial.println(F("Match-waves + min-jitter"));
+  Serial.println(F("MatchWaves + Breakwater + min-jitter"));
   cur.seed=micros()^0xA5A5u; rebuildPattern(cur,stepId); touchPattern();
   bestJ=measureJitterUs(280); best=cur;
   Serial.print(F("initial j=")); Serial.println(bestJ,4);
@@ -487,9 +482,7 @@ void loop(){
 }
 `;
   }
-  function downloadArduino(){
-    downloadBlob(buildArduinoSketch(),'AdaptivePattern_MatchWaves.ino','text/plain');
-  }
+  function downloadArduino(){ downloadBlob(buildArduinoSketch(),'AdaptivePattern_MatchWaves_Breakwater.ino','text/plain'); }
 
   async function runSmart(){
     if(active) return;
@@ -497,15 +490,12 @@ void loop(){
     $('btnStart').disabled=true; $('btnStop').disabled=false; enablePatternDownloads(false);
     bestStd=Infinity; bestScore=-Infinity; bestPattern=null; pattern=null; setProgress(0);
     await initGPU();
-
-    const mb=pickSizeMb();
-    const bytes=mb*1024*1024; // без Math.min — лимита нет
+    const mb=pickSizeMb(), bytes=mb*1024*1024;
     const maxSteps=Math.max(3,Math.min(30,parseInt($('maxSteps').value,10)||10));
     const patience=Math.max(1,Math.min(10,parseInt($('patience').value,10)||2));
-    log('Старт: '+mb+' МБ (unlimited in code)');
-    if(mb>=64) log('Большой размер: возможен OOM браузера','warn');
+    log('Старт: '+mb+' МБ | breakwater + gates + lattice');
+    if(mb>=64) log('Большой размер: риск OOM','warn');
     $('stStatus').textContent='поиск...';
-
     let noImprove=0, adapt=1.0;
     for(let step=1; step<=maxSteps && active; step++){
       $('stStep').textContent=step+'/'+maxSteps;
@@ -533,10 +523,9 @@ void loop(){
       }else{ noImprove++; log('  без улучшения ('+noImprove+'/'+patience+')','warn'); }
       if(noImprove>=patience && step>=3){ log('Стоп без улучшения','warn'); break; }
     }
-
     if(bestPattern){
-      pattern=bestPattern; draw(pattern);
-      setProgress(100); downloadBin(pattern); log('Авто .bin','ok');
+      pattern=bestPattern; draw(pattern); setProgress(100);
+      downloadBin(pattern); log('Авто .bin','ok');
       enablePatternDownloads(true); $('stStatus').textContent='готов';
     }else{ $('stStatus').textContent='ошибка'; log('Нет результата','bad'); }
     $('btnStart').disabled=false; $('btnStop').disabled=true; active=false;
@@ -550,14 +539,11 @@ void loop(){
     log('Стоп');
   }
 
-  $('btnStart').onclick=()=>runSmart().catch(e=>{
-    active=false; log(String(e),'bad');
-    $('btnStart').disabled=false; $('btnStop').disabled=true;
-  });
+  $('btnStart').onclick=()=>runSmart().catch(e=>{ active=false; log(String(e),'bad'); $('btnStart').disabled=false; $('btnStop').disabled=true; });
   $('btnStop').onclick=stop;
   $('btnBin').onclick=()=>{ if(pattern){ downloadBin(pattern); log('Скачан .bin','ok'); } };
   $('btnUsb').onclick=()=>{ if(pattern){ downloadUsb(pattern); log('Скачан USB','ok'); } };
-  $('btnArduino').onclick=()=>{ downloadArduino(); log('Скачан AdaptivePattern_MatchWaves.ino','ok'); };
+  $('btnArduino').onclick=()=>{ downloadArduino(); log('Скачан MatchWaves+Breakwater .ino','ok'); };
 
   ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
 })();
