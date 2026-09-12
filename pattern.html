@@ -262,114 +262,356 @@ $('png').onclick=()=>{if(!best)return;let N=+$('size').value,tmp=document.create
 $('raw').onclick=()=>best&&download(encodeBytes(best.a),'pattern_2D_FFT_auto.bin');
 $('tree').onclick=()=>download(JSON.stringify({version:3,auto:true,N:+$('size').value,params:{notch:+$('notch').value,width:+$('width').value,break:+$('break').value},nodes:treeNodes.map(x=>({...x,a:undefined}))},null,2),'autocorrelation_pattern_tree_auto.json','application/json');
 $('ino').onclick=()=>download(`// AdaptivePattern_MatchWaves_Breakwater_Auto.ino
+// AdaptivePattern_MatchWaves_Breakwater_v2.ino
+// Улучшения: LUT sin, фиксированная точка, популяция, multi-metric fitness,
+// EEPROM, watchdog, платформенные оптимизации.
+
 #include <Arduino.h>
-static const uint16_t PAT_LEN = 512;
-static const uint8_t N_WAVES = 12;
+#include <avr/wdt.h>          // для AVR; на ESP32/SAMD закомментируйте или замените
+#include <EEPROM.h>
+
+// ===================== КОНФИГ =====================
+static const uint16_t PAT_LEN     = 512;
+static const uint8_t  N_WAVES     = 10;
+static const uint8_t  POP_SIZE    = 4;          // размер популяции
+static const uint8_t  ELITE       = 2;
+static const uint8_t  STAGNANT_MAX = 10;
+static const uint16_t JITTER_SAMPLES = 200;
+static const bool     ENABLE_PWM_OUT = false;   // true → вывод на pin 9 (Timer1)
+static const uint8_t  PWM_PIN     = 9;
+
+// ===================== LUT SIN (Q15) =====================
+// 256 значений sin(2π * i/256) в Q15 (−32768…32767)
+static const int16_t SIN_LUT[256] PROGMEM = {
+  0,804,1608,2410,3212,4011,4808,5602,6393,7179,7962,8739,9512,10278,11039,11793,
+  12539,13279,14010,14732,15446,16151,16846,17530,18204,18868,19519,20159,20787,21403,22005,22594,
+  23170,23731,24279,24811,25329,25832,26319,26790,27245,27683,28105,28510,28898,29268,29621,29956,
+  30273,30571,30852,31113,31356,31580,31785,31971,32137,32285,32412,32521,32609,32678,32728,32757,
+  32767,32757,32728,32678,32609,32521,32412,32285,32137,31971,31785,31580,31356,31113,30852,30571,
+  30273,29956,29621,29268,28898,28510,28105,27683,27245,26790,26319,25832,25329,24811,24279,23731,
+  23170,22594,22005,21403,20787,20159,19519,18868,18204,17530,16846,16151,15446,14732,14010,13279,
+  12539,11793,11039,10278,9512,8739,7962,7179,6393,5602,4808,4011,3212,2410,1608,804,
+  0,-804,-1608,-2410,-3212,-4011,-4808,-5602,-6393,-7179,-7962,-8739,-9512,-10278,-11039,-11793,
+  -12539,-13279,-14010,-14732,-15446,-16151,-16846,-17530,-18204,-18868,-19519,-20159,-20787,-21403,-22005,-22594,
+  -23170,-23731,-24279,-24811,-25329,-25832,-26319,-26790,-27245,-27683,-28105,-28510,-28898,-29268,-29621,-29956,
+  -30273,-30571,-30852,-31113,-31356,-31580,-31785,-31971,-32137,-32285,-32412,-32521,-32609,-32678,-32728,-32757,
+  -32767,-32757,-32728,-32678,-32609,-32521,-32412,-32285,-32137,-31971,-31785,-31580,-31356,-31113,-30852,-30571,
+  -30273,-29956,-29621,-29268,-28898,-28510,-28105,-27683,-27245,-26790,-26319,-25832,-25329,-24811,-24279,-23731,
+  -23170,-22594,-22005,-21403,-20787,-20159,-19519,-18868,-18204,-17530,-16846,-16151,-15446,-14732,-14010,-13279,
+  -12539,-11793,-11039,-10278,-9512,-8739,-7962,-7179,-6393,-5602,-4808,-4011,-3212,-2410,-1608,-804
+};
+
+static inline int16_t fastSin(uint8_t idx) {
+  return (int16_t)pgm_read_word(&SIN_LUT[idx]);
+}
+
+// ===================== ПАРАМЕТРЫ =====================
+struct Params {
+  uint16_t C;      // 0…65535 → 0.5…1.9 (масштаб)
+  int16_t  V;      // смещение фазы/скорости
+  uint16_t adapt;  // 0…65535 → 0.6…1.8
+  uint32_t seed;
+};
+
 static uint8_t pattern[PAT_LEN];
-struct Params { float C; float V; float adapt; uint32_t seed; };
-static Params cur = {1.0f,0.0f,1.0f,0xC0FFEEu};
-static Params best = {1.0f,0.0f,1.0f,0xC0FFEEu};
-static float bestJ = 1e9f;
+static Params pop[POP_SIZE];
+static float  fitness[POP_SIZE];
+static Params bestP;
+static float  bestFit = 1e9f;
 static uint16_t stepId = 0;
-static uint8_t stagnant = 0;
-static uint32_t mix32(uint32_t x){ x+=0x9E3779B9u; x=(x^(x>>16))*0x85EBCA6Bu; x=(x^(x>>13))*0xC2B2AE35u; return x^(x>>16); }
-static float wavelengthAt(uint8_t k){
-  const float lamMin=8.0f, lamMax=(float)PAT_LEN*1000.0f;
-  float t=(N_WAVES<=1)?0.0f:(float)k/(float)(N_WAVES-1);
-  return lamMin*powf(lamMax/lamMin,t);
+static uint8_t  stagnant = 0;
+
+// ===================== УТИЛИТЫ =====================
+static uint32_t mix32(uint32_t x) {
+  x += 0x9E3779B9u;
+  x = (x ^ (x >> 16)) * 0x85EBCA6Bu;
+  x = (x ^ (x >> 13)) * 0xC2B2AE35u;
+  return x ^ (x >> 16);
 }
-static float matchedWaveSpectrum(uint16_t i, float adapt){
-  float re=0, im=0, prevPhase=0;
-  for(uint8_t k=0;k<N_WAVES;k++){
-    float lam=wavelengthAt(k);
-    float phase=2.0f*3.1415926f*(float)i/lam;
-    if(k>0){ float d=phase-prevPhase;
-      while(d>3.1415926f) d-=6.2831853f; while(d<-3.1415926f) d+=6.2831853f; phase-=0.25f*d; }
-    prevPhase=phase;
-    float amp=1.0f/(1.0f+0.10f*(float)k);
-    re+=amp*cosf(phase); im+=amp*sinf(phase);
+
+static float constrainf(float v, float lo, float hi) {
+  return v < lo ? lo : (v > hi ? hi : v);
+}
+
+// ===================== ГЕНЕРАЦИЯ ПАТТЕРНА (быстрая) =====================
+static void rebuildPattern(const Params& p, uint16_t step) {
+  uint32_t s1 = mix32(0xDEADBEEFu ^ p.seed ^ (step * 0x9E37u));
+  uint32_t s2 = mix32(0x12345679u ^ p.seed ^ step);
+
+  // Масштабы из Params (Q16-like)
+  float C     = 0.55f + (p.C / 65535.0f) * 1.35f;          // 0.55…1.90
+  float adapt = 0.65f + (p.adapt / 65535.0f) * 1.15f;      // 0.65…1.80
+  float V     = p.V * 0.01f;
+
+  float smooth = constrainf(0.50f + 0.40f * C, 0.50f, 0.93f);
+  float drive  = constrainf(1.30f - 0.40f * C, 0.50f, 1.25f);
+  float prev   = V;
+
+  for (uint16_t i = 0; i < PAT_LEN; i++) {
+    s1 = mix32(s1 + i);
+    s2 = mix32(s2 + i * 0x9E37u);
+
+    // Быстрый sin через LUT (фаза ~ 0…255)
+    uint8_t ph1 = (uint8_t)((i * 4 + step) & 255);           // ~64-period
+    uint8_t ph2 = (uint8_t)((i * 2 + (step >> 1)) & 255);    // ~128-period
+    uint8_t ph3 = (uint8_t)((i + step) & 255);
+
+    float cpu  = fastSin(ph1) / 32768.0f;
+    float ram  = fastSin(ph2) / 32768.0f;
+    float a    = fastSin(ph3) / 32768.0f;
+    float b    = fastSin((uint8_t)(ph3 + 85)) / 32768.0f;    // +120°
+
+    // Matched waves (упрощённо, но быстро)
+    float waves = 0;
+    for (uint8_t k = 0; k < N_WAVES; k++) {
+      uint8_t pk = (uint8_t)((i * (k + 3) + step * (k + 1)) & 255);
+      float amp = 1.0f / (1.0f + 0.12f * k);
+      waves += amp * (fastSin(pk) / 32768.0f);
+    }
+    waves /= N_WAVES;
+
+    float I = 0.5f * (a * a + b * b);
+    float damp = (I > 0.45f) ? (I - 0.45f) : 0.0f;
+
+    float raw = adapt * (0.14f * cpu + 0.12f * ram + 0.10f * a + 0.08f * b)
+              + 0.28f * waves
+              + 0.04f * ((s1 & 255) / 255.0f)
+              + 0.03f * ((s2 & 255) / 255.0f)
+              - 0.04f * damp * adapt;
+
+    raw = tanhf(raw * drive);
+
+    // Breakwater / calm
+    float x = (float)(i & 127) / 128.0f;
+    float stepK  = constrainf((x - 0.15f) / 0.35f, 0.0f, 1.0f);
+    float crest  = max(0.0f, 1.0f - fabsf(x - 0.55f) / 0.10f);
+    float harbor = constrainf((x - 0.65f) / 0.35f, 0.0f, 1.0f);
+    float breakK = 0.4f * stepK + 0.5f * crest;
+    float calmK  = 0.2f + 0.6f * harbor;
+    float ripple = raw - prev;
+    raw = raw - breakK * 0.55f * ripple;
+    raw = raw * (1.0f - calmK * 0.5f) + prev * calmK * 0.5f;
+    raw = tanhf(raw);
+
+    float v = raw * (1.0f - smooth) + prev * smooth;
+    prev = v;
+
+    int val = (int)floorf((v + 1.0f) * 127.5f) & 255;
+    pattern[i] = (uint8_t)val;
   }
-  float mag=sqrtf(re*re+im*im)/(float)N_WAVES;
-  float out=tanhf(mag*1.4f);
-  if(out<0.08f) out=0.08f+out*0.5f;
-  return out*adapt;
 }
-static float breakwaterCalm(uint16_t i, float raw, float prev){
-  float x=(float)(i & 127)/128.0f;
-  float step=constrain((x-0.15f)/0.35f,0.0f,1.0f);
-  float crest=max(0.0f,1.0f-fabsf(x-0.55f)/0.10f);
-  float harbor=constrain((x-0.65f)/0.35f,0.0f,1.0f);
-  float breakK=0.4f*step+0.5f*crest;
-  float calmK=0.2f+0.6f*harbor;
-  float ripple=raw-prev;
-  raw=raw-breakK*0.6f*ripple;
-  raw=raw*(1.0f-calmK*0.5f)+prev*calmK*0.5f;
-  return tanhf(raw);
-}
-float measureJitterUs(uint16_t samples=240){
-  uint32_t prev=micros();
-  for(uint16_t i=0;i<30;i++){ volatile uint32_t s=mix32(i); (void)s; prev=micros(); }
-  float sum=0,sum2=0; prev=micros();
-  for(uint16_t i=0;i<samples;i++){
-    volatile uint32_t sink=mix32(i^cur.seed); sink^=pattern[i&(PAT_LEN-1)]; (void)sink;
-    uint32_t now=micros(); float d=(float)(now-prev); prev=now; sum+=d; sum2+=d*d;
+
+// ===================== FITNESS =====================
+// Комбинированный score: jitter + гладкость + разброс
+static float measureFitness() {
+  // 1. Jitter (основной)
+  uint32_t prev = micros();
+  // прогрев
+  for (uint16_t i = 0; i < 20; i++) {
+    volatile uint32_t sink = mix32(i ^ bestP.seed);
+    sink ^= pattern[i & (PAT_LEN - 1)];
+    (void)sink;
+    prev = micros();
   }
-  float mean=sum/(float)samples, var=sum2/(float)samples-mean*mean; if(var<0) var=0;
-  return sqrt(var);
-}
-void rebuildPattern(const Params& p, uint16_t step){
-  uint32_t s1=mix32(0xDEADBEEFu^p.seed^(step*0x9E37u));
-  uint32_t s2=mix32(0x12345679u^p.seed^step);
-  float prev=p.V*0.01f;
-  float smooth=constrain(0.50f+0.40f*p.C,0.50f,0.93f);
-  float drive=constrain(1.30f-0.40f*p.C,0.50f,1.25f);
-  for(uint16_t i=0;i<PAT_LEN;i++){
-    s1=mix32(s1+i); s2=mix32(s2+i*0x9E37u);
-    float theta=(2.0f*3.1415926f*1.6180339f*(float)i)/256.0f+(float)step*0.01f+p.V*0.001f;
-    float cpu=sinf(2.0f*3.1415926f*(float)i/64.0f+theta*0.15f);
-    float ram=sinf(2.0f*3.1415926f*(float)i/128.0f+theta*0.07f);
-    float a=cosf(theta*0.19f*drive), b=sinf(theta*0.41f+1.17f+p.V*0.01f);
-    float I=0.5f*(a*a+b*b); float damp=(I>0.45f)?(I-0.45f):0.0f;
-    float waves=matchedWaveSpectrum(i,p.adapt);
-    float matchPull=0.15f*sinf(theta*0.07f);
-    float raw=p.adapt*(0.14f*cpu+0.12f*ram+0.10f*a+0.08f*b)+0.26f*waves+0.08f*matchPull
-             -0.04f*damp*p.adapt+0.04f*((s1&255)/255.0f)+0.03f*((s2&255)/255.0f);
-    raw=tanhf(raw*drive);
-    raw=breakwaterCalm(i, raw, prev);
-    float v=raw*(1.0f-smooth)+prev*smooth; prev=v;
-    int val=(int)floorf((v+1.0f)*127.5f)%256; if(val<0) val+=256;
-    pattern[i]=(uint8_t)val;
+
+  float sum = 0, sum2 = 0;
+  uint16_t valid = 0;
+  prev = micros();
+  for (uint16_t i = 0; i < JITTER_SAMPLES; i++) {
+    volatile uint32_t sink = mix32(i ^ bestP.seed);
+    sink ^= pattern[i & (PAT_LEN - 1)];
+    (void)sink;
+    uint32_t now = micros();
+    float d = (float)(now - prev);
+    prev = now;
+    // отбрасываем явные выбросы (> 50 мкс)
+    if (d < 50.0f) {
+      sum += d;
+      sum2 += d * d;
+      valid++;
+    }
   }
+  if (valid < 50) return 1e6f;   // слишком много выбросов
+  float mean = sum / valid;
+  float var  = sum2 / valid - mean * mean;
+  if (var < 0) var = 0;
+  float jitter = sqrtf(var);
+
+  // 2. Smoothness (меньше перепадов = лучше)
+  float diffSum = 0;
+  for (uint16_t i = 1; i < PAT_LEN; i++) {
+    diffSum += abs((int)pattern[i] - (int)pattern[i - 1]);
+  }
+  float smoothPen = diffSum / (PAT_LEN * 128.0f);   // 0…~2
+
+  // 3. Простая «энтропия» (разброс значений)
+  uint16_t hist[16] = {0};
+  for (uint16_t i = 0; i < PAT_LEN; i += 4) {
+    hist[pattern[i] >> 4]++;
+  }
+  float entropy = 0;
+  for (uint8_t h = 0; h < 16; h++) {
+    if (hist[h]) {
+      float p = hist[h] / (PAT_LEN / 4.0f);
+      entropy -= p * log2f(p);
+    }
+  }
+  entropy /= 4.0f;   // 0…1
+
+  // Итоговый score (меньше = лучше)
+  // jitter доминирует, smoothness и entropy — регуляризаторы
+  return jitter * 1.0f + smoothPen * 2.5f + (1.0f - entropy) * 1.8f;
 }
-void touchPattern(){ volatile uint8_t acc=0; for(uint16_t i=0;i<PAT_LEN;i+=16) acc^=pattern[i]; (void)acc; }
-Params proposeCandidate(const Params& base, uint8_t mode){
-  Params p=base; uint32_t r=mix32(micros()^base.seed^(uint32_t)mode);
-  float n1=((r&255)/255.0f)*2.0f-1.0f, n2=(((r>>8)&255)/255.0f)*2.0f-1.0f, n3=(((r>>16)&255)/255.0f)*2.0f-1.0f;
-  float scale=(mode%3==0)?0.08f:((mode%3==1)?0.18f:0.35f);
-  p.C=constrain(base.C+n1*scale,0.55f,1.90f);
-  p.V=base.V+n2*(5.0f+20.0f*scale);
-  p.adapt=constrain(base.adapt+n3*scale*0.5f,0.65f,1.80f);
-  if((r&7)==0) p.seed^=mix32(micros());
+
+// ===================== ЭВОЛЮЦИЯ =====================
+static Params mutate(const Params& base, uint8_t intensity) {
+  Params p = base;
+  uint32_t r = mix32(micros() ^ base.seed ^ (uint32_t)intensity ^ stepId);
+
+  float scale = (intensity == 0) ? 0.06f : (intensity == 1 ? 0.14f : 0.28f);
+
+  int16_t dC = (int16_t)(((r & 255) - 128) * scale * 400);
+  p.C = (uint16_t)constrain((int)p.C + dC, 0, 65535);
+
+  int16_t dV = (int16_t)((((r >> 8) & 255) - 128) * scale * 80);
+  p.V = (int16_t)constrain((int)p.V + dV, -2000, 2000);
+
+  int16_t dA = (int16_t)((((r >> 16) & 255) - 128) * scale * 350);
+  p.adapt = (uint16_t)constrain((int)p.adapt + dA, 0, 65535);
+
+  if ((r & 15) == 0) p.seed ^= mix32(micros());
   return p;
 }
-void setup(){
-  Serial.begin(115200); delay(300);
-  Serial.println(F("MatchWaves + Breakwater + min-jitter (AUTO)"));
-  cur.seed=micros()^0xA5A5u; rebuildPattern(cur,stepId); touchPattern();
-  bestJ=measureJitterUs(280); best=cur;
-  Serial.print(F("initial j=")); Serial.println(bestJ,4);
-}
-void loop(){
-  Params cand=proposeCandidate(best,stagnant); stepId++;
-  rebuildPattern(cand,stepId); touchPattern();
-  float j=measureJitterUs(240);
-  if(j+0.005f<bestJ){ bestJ=j; best=cand; cur=cand; stagnant=0;
-    Serial.print(F("IMPROVED j=")); Serial.println(bestJ,4);
-  } else { cur=best; rebuildPattern(cur,stepId); stagnant++;
-    Serial.print(F("reject j=")); Serial.print(j,4); Serial.print(F(" best=")); Serial.println(bestJ,4);
+
+static void sortPopulation() {
+  // простой bubble (POP_SIZE маленький)
+  for (uint8_t i = 0; i < POP_SIZE - 1; i++) {
+    for (uint8_t j = 0; j < POP_SIZE - 1 - i; j++) {
+      if (fitness[j] > fitness[j + 1]) {
+        float tf = fitness[j]; fitness[j] = fitness[j + 1]; fitness[j + 1] = tf;
+        Params tp = pop[j]; pop[j] = pop[j + 1]; pop[j + 1] = tp;
+      }
+    }
   }
-  if(stagnant>=8){ best.seed^=mix32(micros()^0x5A5Au); stagnant=0; Serial.println(F("reseed")); }
-  delay(20);
+}
+
+// ===================== EEPROM =====================
+static const int EEPROM_MAGIC = 0xA5;
+static void saveBest() {
+  EEPROM.update(0, EEPROM_MAGIC);
+  EEPROM.put(1, bestP);
+  EEPROM.put(1 + sizeof(Params), bestFit);
+}
+
+static bool loadBest() {
+  if (EEPROM.read(0) != EEPROM_MAGIC) return false;
+  EEPROM.get(1, bestP);
+  EEPROM.get(1 + sizeof(Params), bestFit);
+  return true;
+}
+
+// ===================== SETUP / LOOP =====================
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+  Serial.println(F("MatchWaves v2 · LUT + Population + Multi-metric"));
+
+  // Watchdog (AVR)
+  #if defined(__AVR__)
+  wdt_enable(WDTO_2S);
+  #endif
+
+  // Инициализация популяции
+  uint32_t seed0 = micros() ^ 0xA5A5A5A5u;
+  for (uint8_t i = 0; i < POP_SIZE; i++) {
+    pop[i].C     = 30000 + (mix32(seed0 + i) & 0x3FFF);
+    pop[i].V     = (int16_t)((mix32(seed0 + i * 3) & 0x1FF) - 256);
+    pop[i].adapt = 28000 + (mix32(seed0 + i * 7) & 0x3FFF);
+    pop[i].seed  = mix32(seed0 ^ (i * 0x9E3779B9u));
+  }
+
+  if (loadBest()) {
+    pop[0] = bestP;
+    Serial.print(F("Loaded bestFit="));
+    Serial.println(bestFit, 4);
+  }
+
+  // Первая оценка
+  for (uint8_t i = 0; i < POP_SIZE; i++) {
+    rebuildPattern(pop[i], stepId);
+    fitness[i] = measureFitness();
+  }
+  sortPopulation();
+  bestP = pop[0];
+  bestFit = fitness[0];
+  Serial.print(F("initial best="));
+  Serial.println(bestFit, 4);
+
+  if (ENABLE_PWM_OUT) {
+    pinMode(PWM_PIN, OUTPUT);
+    // Timer1 Fast PWM 8-bit (примерно)
+    #if defined(__AVR_ATmega328P__)
+    TCCR1A = _BV(COM1A1) | _BV(WGM10);
+    TCCR1B = _BV(WGM12) | _BV(CS10);
+    #endif
+  }
+}
+
+void loop() {
+  #if defined(__AVR__)
+  wdt_reset();
+  #endif
+
+  stepId++;
+
+  // Новое поколение: элита + мутанты
+  for (uint8_t i = ELITE; i < POP_SIZE; i++) {
+    uint8_t parent = i % ELITE;
+    uint8_t intensity = stagnant > 5 ? 2 : (stagnant > 2 ? 1 : 0);
+    pop[i] = mutate(pop[parent], intensity);
+  }
+
+  // Оценка
+  for (uint8_t i = 0; i < POP_SIZE; i++) {
+    rebuildPattern(pop[i], stepId);
+    fitness[i] = measureFitness();
+  }
+  sortPopulation();
+
+  if (fitness[0] + 0.008f < bestFit) {
+    bestFit = fitness[0];
+    bestP = pop[0];
+    stagnant = 0;
+    saveBest();
+    Serial.print(F("IMPROVED "));
+    Serial.println(bestFit, 4);
+  } else {
+    stagnant++;
+    // возвращаем элиту
+    for (uint8_t i = 0; i < ELITE; i++) {
+      pop[i] = bestP;
+      fitness[i] = bestFit;
+    }
+    Serial.print(F("reject "));
+    Serial.print(fitness[0], 4);
+    Serial.print(F(" best="));
+    Serial.println(bestFit, 4);
+  }
+
+  if (stagnant >= STAGNANT_MAX) {
+    bestP.seed ^= mix32(micros() ^ 0x5A5A5A5Au);
+    stagnant = 0;
+    Serial.println(F("reseed"));
+  }
+
+  // Опциональный вывод паттерна
+  if (ENABLE_PWM_OUT) {
+    static uint16_t idx = 0;
+    OCR1A = pattern[idx++];
+    if (idx >= PAT_LEN) idx = 0;
+  }
+
+  delay(15);
 }
 `,'AdaptivePattern_MatchWaves_Breakwater_Auto.ino','text/plain');
 ctx.fillStyle='#000';ctx.fillRect(0,0,cv.width,cv.height);
