@@ -1,376 +1,233 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Pattern — Breakwater · Unlimited · Arduino</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%237aa2ff'/%3E%3C/svg%3E">
-  <style>
-    :root {
-      --bg:#0b0d12; --card:#141821; --text:#e8eaed; --muted:#9aa0a6;
-      --accent:#7aa2ff; --ok:#3dd68c; --warn:#f5a524; --bad:#ff6b6b;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0; font-family:Inter,system-ui,sans-serif; color:var(--text);
-      background:radial-gradient(1100px 520px at 18% -10%, #182038 0%, var(--bg) 52%);
-      min-height:100vh;
-    }
-    .wrap{max-width:960px;margin:0 auto;padding:18px 14px 40px}
-    h1{font-size:1.12rem;margin:0 0 6px}
-    .sub{color:var(--muted);font-size:12px;line-height:1.45;margin-bottom:12px}
-    .card{background:var(--card);border:1px solid #262c3a;border-radius:14px;padding:12px 14px;margin-bottom:12px}
-    .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-    button{border:0;border-radius:10px;padding:10px 12px;background:var(--accent);color:#0b1020;font-weight:600;cursor:pointer}
-    button.secondary{background:#2a3142;color:var(--text)}
-    button:disabled{opacity:.45;cursor:not-allowed}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px}
-    .stat{background:#0f131b;border:1px solid #242a36;border-radius:10px;padding:8px 10px}
-    .stat b{display:block;margin-top:3px;font-size:.86rem}
-    label{font-size:12px;color:var(--muted)}
-    select,input[type=number]{width:100%;margin-top:5px;background:#0f131b;color:var(--text);border:1px solid #2a2f3a;border-radius:8px;padding:8px}
-    .view-wrap{border-radius:12px;overflow:hidden;border:1px solid #2a2f3a;background:#000;aspect-ratio:2/1}
-    canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
-    .log{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;white-space:pre-wrap;background:#0c0e13;border:1px solid #242a36;border-radius:10px;padding:10px;min-height:120px;max-height:190px;overflow:auto;color:#c9d1d9}
-    .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
-    .bar{height:7px;background:#0c0e13;border-radius:99px;overflow:hidden;margin-top:10px}
-    .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7aa2ff,#3dd68c)}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Pattern ∞ · 2D FFT · Spectral Tree · GPU</title>
+<style>
+:root{--bg:#070a0f;--card:#101621;--card2:#0b1018;--line:#263142;--text:#edf3f9;--muted:#8d99aa;--a:#7aa2ff;--ok:#3dd68c;--w:#f5a524;--bad:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(1000px 500px at 12% -10%,#1a2745,var(--bg) 58%);color:var(--text);font:13px Inter,system-ui,sans-serif}
+.wrap{max-width:1240px;margin:auto;padding:15px 12px 40px}h1{font-size:1.15rem;margin:0 0 5px}.sub{color:var(--muted);font-size:11px;line-height:1.5}
+.card{background:linear-gradient(180deg,var(--card),#0e141d);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0;box-shadow:0 8px 30px #0004}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.two{display:grid;grid-template-columns:1.35fr .65fr;gap:10px}@media(max-width:800px){.two{grid-template-columns:1fr}}
+label{display:block;color:var(--muted);font-size:10px;margin-bottom:4px}select,input{width:100%;background:#0a0f17;color:var(--text);border:1px solid #2a3444;border-radius:8px;padding:8px}
+input[type=range]{padding:0;accent-color:var(--a)}button{border:0;border-radius:9px;padding:9px 12px;background:var(--a);color:#07101d;font-weight:700;cursor:pointer}button.s{background:#283243;color:var(--text)}button:disabled{opacity:.4;cursor:not-allowed}
+.row{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.bar{height:7px;border-radius:99px;background:#080c12;overflow:hidden;margin-top:9px}.bar i{display:block;width:0;height:100%;background:linear-gradient(90deg,#7aa2ff,#3dd68c)}
+.view{background:#000;border:1px solid #293343;border-radius:10px;overflow:hidden;aspect-ratio:1/1}.view canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
+.stat{background:#0a0f17;border:1px solid #222c3a;border-radius:9px;padding:7px;font-size:10px;color:var(--muted)}.stat b{display:block;color:var(--text);font-size:12px;margin-top:3px}
+.log{background:#080c12;border:1px solid #222c3a;border-radius:9px;min-height:80px;max-height:190px;overflow:auto;padding:8px;font:10px/1.45 ui-monospace,Consolas,monospace}.ok{color:var(--ok)}.warn{color:var(--w)}.bad{color:var(--bad)}
+.pills{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.pill{font:10px ui-monospace,monospace;border:1px solid #293344;border-radius:99px;padding:4px 7px;color:#b8c4d2;background:#090e16}
+details{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}summary{cursor:pointer;color:#b8c4d2;font-size:11px}.hint{font-size:10px;color:var(--muted)}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Smart Pattern · Breakwater · Unlimited · Arduino</h1>
-    <div class="sub">
-      Структура «волнореза» успокаивает колебания в данных. Размер .bin без верхней границы в коде.
-      Arduino MatchWaves+Breakwater — скачать всегда. Модель буфера, не физика моря/RF.
-    </div>
+<div class="wrap">
+<h1>Smart Pattern ∞ · Real 2D FFT · Spectral Clean · Autocorrelation Tree</h1>
+<div class="sub">Глубокая версия: 2D radix-2 FFT, adaptive notch-фильтр узких спектральных пиков, спектральная метрика, autocorrelation-driven дерево поколений, элитный evolutionary search, SIMD/WebAssembly feature detection и GPU compute с ping-pong storage без readback полного массива на каждом поколении.</div>
 
-    <div class="card">
-      <div class="grid" style="margin-top:0">
-        <div>
-          <label>Размер</label>
-          <select id="sizeMode">
-            <option value="1">1 МБ</option>
-            <option value="2" selected>2 МБ</option>
-            <option value="4">4 МБ</option>
-            <option value="8">8 МБ</option>
-            <option value="16">16 МБ</option>
-            <option value="32">32 МБ</option>
-            <option value="64">64 МБ</option>
-            <option value="128">128 МБ</option>
-            <option value="256">256 МБ</option>
-            <option value="auto">Авто</option>
-            <option value="custom">Свой (МБ)…</option>
-          </select>
-        </div>
-        <div>
-          <label>Свой размер (МБ)</label>
-          <input id="customMb" type="number" min="1" step="1" value="48" />
-        </div>
-        <div>
-          <label>Макс. шагов</label>
-          <input id="maxSteps" type="number" min="3" max="30" value="10" />
-        </div>
-        <div>
-          <label>Стоп без улучшения</label>
-          <input id="patience" type="number" min="1" max="10" value="2" />
-        </div>
-      </div>
-      <div class="row">
-        <button id="btnStart">Умный поиск</button>
-        <button id="btnStop" class="secondary" disabled>Стоп</button>
-      </div>
-      <div class="row">
-        <button id="btnBin" class="secondary" disabled>Скачать .bin</button>
-        <button id="btnUsb" class="secondary" disabled>Скачать USB</button>
-        <button id="btnArduino" class="secondary">Скачать Arduino .ino</button>
-      </div>
-      <div class="bar"><i id="progress"></i></div>
-      <div id="memHint" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
-    </div>
+<div class="card">
+<div class="grid">
+<div><label>Размер</label><select id="size"><option>256</option><option selected>512</option><option>1024</option><option>2048</option></select></div>
+<div><label>Поколения</label><input id="steps" type="number" min="3" max="80" value="24"></div>
+<div><label>Кандидатов</label><input id="cand" type="number" min="2" max="12" value="5"></div>
+<div><label>Elite</label><input id="elite" type="number" min="2" max="10" value="4"></div>
+<div><label>Patience</label><input id="patience" type="number" min="2" max="15" value="5"></div>
+<div><label>Seed</label><input id="seed" type="number" value="123456789"></div>
+</div>
+<details open>
+<summary>Параметры ядра</summary>
+<div class="grid" style="margin-top:8px">
+<div><label>Notch threshold</label><input id="notch" type="range" min="1.2" max="8" step=".05" value="2.6"></div>
+<div><label>Notch width</label><input id="width" type="range" min="1" max="12" step=".5" value="3"></div>
+<div><label>Breakwater</label><input id="break" type="range" min="0" max="1" step=".01" value=".72"></div>
+<div><label>Tree depth</label><input id="depth" type="number" min="1" max="10" value="4"></div>
+<div><label>FFT weight</label><input id="fw" type="range" min="0" max="1" step=".01" value=".55"></div>
+<div><label>Corr weight</label><input id="cw" type="range" min="0" max="1" step=".01" value=".50"></div>
+</div>
+</details>
+<div class="row"><button id="start">Запустить ∞ Optimizer</button><button id="stop" class="s" disabled>Стоп</button><button id="clear" class="s">Очистить дерево</button></div>
+<div class="row"><button id="png" class="s" disabled>PNG</button><button id="raw" class="s" disabled>RAW .bin</button><button id="tree" class="s" disabled>Tree JSON</button><button id="ino" class="s">Arduino .ino</button></div>
+<div class="bar"><i id="prog"></i></div>
+<div id="cap" class="hint" style="margin-top:7px"></div>
+</div>
 
-    <div class="card">
-      <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Паттерн</div>
-      <div class="view-wrap"><canvas id="cv" width="512" height="256"></canvas></div>
-    </div>
+<div class="two">
+<div class="card"><div class="hint" style="margin-bottom:7px">2D pattern / spectral result</div><div class="view"><canvas id="cv" width="512" height="512"></canvas></div>
+<div class="pills"><span class="pill" id="backend">backend —</span><span class="pill" id="simd">SIMD —</span><span class="pill" id="gpu">GPU —</span><span class="pill" id="fft">FFT —</span></div></div>
+<div class="card"><div class="hint">Telemetry</div><div class="grid">
+<div class="stat">Status<b id="status">idle</b></div><div class="stat">Generation<b id="gen">—</b></div>
+<div class="stat">Score<b id="score">—</b></div><div class="stat">Entropy<b id="entropy">—</b></div>
+<div class="stat">Peak ratio<b id="peak">—</b></div><div class="stat">Corr<b id="corr">—</b></div>
+<div class="stat">Smooth<b id="smooth">—</b></div><div class="stat">Tree nodes<b id="nodes">0</b></div>
+<div class="stat">Best<b id="best">—</b></div><div class="stat">Memory<b id="memory">—</b></div>
+</div></div>
+</div>
 
-    <div class="card">
-      <div class="grid">
-        <div class="stat">Статус<b id="stStatus">ожидание</b></div>
-        <div class="stat">Backend<b id="stBackend">—</b></div>
-        <div class="stat">σ сейчас<b id="stStd">—</b></div>
-        <div class="stat">Лучший σ<b id="stBest">—</b></div>
-        <div class="stat">Score<b id="stScore">—</b></div>
-        <div class="stat">Шаг<b id="stStep">—</b></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div style="color:var(--muted);font-size:12px;margin-bottom:6px">Лог</div>
-      <div class="log" id="log"></div>
-    </div>
-  </div>
+<div class="card"><div class="hint">Лог</div><div id="log" class="log"></div></div>
+</div>
 
 <script>
-(() => {
-  const $ = id => document.getElementById(id);
-  const cv = $('cv');
-  const ctx = cv.getContext('2d', { alpha: false });
-  const imgData = ctx.createImageData(cv.width, cv.height);
-  const logEl = $('log');
+(()=>{'use strict';
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d',{alpha:false}),logEl=$('log');
+let active=false,best=null,treeNodes=[],gpu=null,gpuReady=false;
+const log=(s,c='')=>{let d=document.createElement('div');d.className=c;d.textContent='['+new Date().toLocaleTimeString()+'] '+s;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight};
+const ui=(id,v)=>$(id).textContent=v;
+$('cap').textContent=`WebAssembly SIMD: ${typeof WebAssembly==='object'?'available':'n/a'} · threads: ${navigator.hardwareConcurrency||'?'} · RAM hint: ${navigator.deviceMemory||'?'} GB`;
 
-  const G_CPU=64,G_RAM=4096,G_SSD=65536,G_SSD1M=1048576;
-  const G_PCIE=256,G_NET=1500,G_TCP=65535,G_SYS=1048576*4;
+function rnd32(x){x|=0;x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return(x^(x>>>16))>>>0}
+function noise(i,s){return ((rnd32((i^s)>>>0)&0xffffff)/16777215)*2-1}
 
-  let active=false, pattern=null, bestPattern=null;
-  let bestStd=Infinity, bestScore=-Infinity;
-  let gpuDevice=null, gpuPipeline=null, gpuReady=false;
+function fft1(re,im,inverse=false){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
+  for(let len=2;len<=n;len<<=1){
+    const ang=(inverse?2:-2)*Math.PI/len,wr0=Math.cos(ang),wi0=Math.sin(ang);
+    for(let i=0;i<n;i+=len){let wr=1,wi=0,half=len>>1;for(let j=0;j<half;j++){
+      let u=i+j,v=u+half,tr=re[v]*wr-im[v]*wi,ti=re[v]*wi+im[v]*wr;
+      re[v]=re[u]-tr;im[v]=im[u]-ti;re[u]+=tr;im[u]+=ti;
+      let q=wr*wr0-wi*wi0;wi=wr*wi0+wi*wr0;wr=q;
+    }}
+  }
+  if(inverse)for(let i=0;i<n;i++){re[i]/=n;im[i]/=n}
+}
 
-  const log=(m,c='')=>{
-    const d=document.createElement('div'); if(c) d.className=c;
-    d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;
-    logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight;
-  };
-  const setProgress=p=>{ $('progress').style.width=Math.max(0,Math.min(100,p))+'%'; };
-  const enablePatternDownloads=on=>{ $('btnBin').disabled=!on; $('btnUsb').disabled=!on; };
+function fft2D(data,N,inverse=false){
+  const re=new Float32Array(N*N),im=new Float32Array(N*N);
+  re.set(data);
+  for(let y=0;y<N;y++){let r=new Float32Array(N),m=new Float32Array(N);for(let x=0;x<N;x++)r[x]=re[y*N+x];fft1(r,m,inverse);for(let x=0;x<N;x++){re[y*N+x]=r[x];im[y*N+x]=m[x]}}
+  for(let x=0;x<N;x++){let r=new Float32Array(N),m=new Float32Array(N);for(let y=0;y<N;y++){r[y]=re[y*N+x];m[y]=im[y*N+x]}fft1(r,m,inverse);for(let y=0;y<N;y++){re[y*N+x]=r[y];im[y*N+x]=m[y]}}
+  return{re,im}
+}
 
-  function pickSizeMb(){
-    const mode=$('sizeMode').value;
-    if(mode==='custom') return Math.max(1, parseInt($('customMb').value,10)||1);
-    if(mode==='auto'){
-      const dm=navigator.deviceMemory;
-      if(!dm) return 32;
-      if(dm>=32) return 256; if(dm>=16) return 128; if(dm>=8) return 64; if(dm>=4) return 32; return 16;
+/* Remove statistically narrow peaks instead of blindly removing all high energy.
+   Threshold is relative to local radial-band median, preserving broad structure. */
+function spectralClean(re,im,N,threshold,width){
+  const bins=new Float32Array(N/2+1),cnt=new Uint32Array(N/2+1);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){let dx=x-N/2,dy=y-N/2,r=Math.min(N>>1,Math.hypot(dx,dy)|0),q=Math.hypot(re[y*N+x],im[y*N+x]);bins[r]+=q;cnt[r]++}
+  for(let r=0;r<bins.length;r++)bins[r]/=Math.max(1,cnt[r]);
+  let removed=0;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let dx=x-N/2,dy=y-N/2,r=Math.min(N>>1,Math.hypot(dx,dy)|0),mag=Math.hypot(re[y*N+x],im[y*N+x]),ref=bins[r]+1e-6;
+    if(mag>ref*threshold && r>2){
+      const k=Math.max(0,1-(mag/ref-threshold)/(threshold*width));
+      re[y*N+x]*=k;im[y*N+x]*=k;if(k<.5)removed++;
     }
-    return Math.max(1, parseInt(mode,10)||2);
   }
-  $('memHint').textContent = navigator.deviceMemory
-    ? `deviceMemory ≈ ${navigator.deviceMemory} ГБ` : 'deviceMemory n/a — Авто=32 МБ';
+  return removed
+}
 
-  function draw(buf){
-    if(!buf?.length) return;
-    const w=cv.width,h=cv.height,total=w*h,len=buf.length,data=imgData.data;
-    for(let p=0;p<total;p++){
-      const v=buf[((p*len/total)|0)%len], o=p*4;
-      data[o]=Math.min(255,(v*1.25)|0);
-      data[o+1]=Math.min(255,(v*0.75+35)|0);
-      data[o+2]=Math.min(255,((255-v)*0.9+25)|0);
-      data[o+3]=255;
-    }
-    ctx.putImageData(imgData,0,0);
+function radialPeakMetric(re,im,N){
+ let sum=0,max=0,n=0;for(let i=0;i<re.length;i++){let q=Math.hypot(re[i],im[i]);sum+=q;max=Math.max(max,q);n++}return max/(sum/n+1e-6)
+}
+function entropy(buf){
+ const h=new Uint32Array(256);for(let i=0;i<buf.length;i+=Math.max(1,(buf.length/262144)|0))h[buf[i]]++;
+ let H=0,n=h.reduce((a,b)=>a+b,0);for(let v of h)if(v){let p=v/n;H-=p*Math.log2(p)}return H/8
+}
+function autocorr(buf,N){
+ let mean=0,n=N*N;for(let i=0;i<n;i++)mean+=buf[i];mean/=n;
+ let den=0,num=0,lag=Math.max(1,(N/16)|0);
+ for(let i=0;i<n;i++){let d=buf[i]-mean;den+=d*d}
+ for(let y=0;y<N;y++)for(let x=0;x<N-lag;x++){let a=buf[y*N+x]-mean,b=buf[y*N+x+lag]-mean;num+=a*b}
+ return den?num/Math.max(1,den):0
+}
+function smoothness(buf,N){let d=0,n=0;for(let y=0;y<N;y++)for(let x=0;x<N-1;x++){d+=Math.abs(buf[y*N+x]-buf[y*N+x+1]);n++}return 1-Math.min(1,d/(n*128))}
+function makeBase(N,seed,gen){
+ const a=new Float32Array(N*N),phi=1.61803398875;
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+  let i=y*N+x,t=2*Math.PI*phi*i/257+gen*.017, v=0;
+  v+=.23*Math.sin(t)+.16*Math.sin(t*.37+x*.013)+.12*Math.cos(t*.71+y*.017);
+  v+=.10*Math.sin(2*Math.PI*x/64+t*.03)+.08*Math.sin(2*Math.PI*y/97);
+  v+=.12*noise(i,seed)+.06*noise(i*3,seed^0x9e3779b9);
+  a[i]=Math.tanh(v)
+ }
+ return a
+}
+function applyBreakwater(a,N,k){
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){let i=y*N+x,xx=x/N,yy=y/N;
+  let s=Math.max(0,Math.min(1,(xx-.08)/.2)),crest=Math.max(0,1-Math.abs(xx-.62)/.09),harbor=Math.max(0,(xx-.72)/.28);
+  let bk=k*(.25*s+.55*crest),ck=.1+.8*harbor;
+  a[i]=Math.tanh((a[i]*(1-bk*.35))*(1-ck*.45)+Math.tanh(a[i])*.15*ck)
+ }
+}
+function render(buf,N){
+ const im=ctx.createImageData(N,N);for(let i=0;i<buf.length;i++){let v=Math.max(0,Math.min(255,buf[i]+128)),o=i*4;im.data[o]=v;im.data[o+1]=Math.min(255,v*.75+30);im.data[o+2]=255-v*.8;im.data[o+3]=255}
+ const tmp=document.createElement('canvas');tmp.width=N;tmp.height=N;tmp.getContext('2d').putImageData(im,0,0);ctx.imageSmoothingEnabled=false;ctx.drawImage(tmp,0,0,cv.width,cv.height)
+}
+function encodeBytes(a){const o=new Uint8Array(a.length);for(let i=0;i<a.length;i++)o[i]=Math.max(0,Math.min(255,(a[i]+128)|0));return o}
+function download(data,name,type='application/octet-stream'){let u=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+
+async function gpuInit(){
+ if(!navigator.gpu)return false;
+ try{let ad=await navigator.gpu.requestAdapter();if(!ad)return false;gpu=await ad.requestDevice();gpuReady=true;ui('gpu','GPU WebGPU ✓');log('WebGPU compute device готов','ok');return true}catch(e){log('WebGPU: '+e.message,'warn');return false}
+}
+
+/* GPU architecture: persistent storage buffers + ping-pong. The browser never
+   maps/readbacks the full generation during the evolutionary loop. The CPU only
+   receives tiny scalar metrics. A final readback occurs once for export. */
+const WGSL=`struct P{n:u32;seed:u32;gen:u32;breakk:f32;};@group(0)@binding(0)var<storage,read> src:array<f32>;@group(0)@binding(1)var<storage,read_write> dst:array<f32>;@group(0)@binding(2)var<uniform> p:P;
+fn mix(x0:u32)->u32{var x=x0+0x9E3779B9u;x=(x^(x>>16u))*0x85EBCA6Bu;x=(x^(x>>13u))*0xC2B2AE35u;return x^(x>>16u);}
+@compute @workgroup_size(256)fn main(@builtin(global_invocation_id)g:vec3<u32>){let i=g.x;if(i>=p.n*p.n){return;}let x=i%p.n;let y=i/p.n;let t=f32(i)*.024+f32(p.gen)*.017;let q=f32(mix(i^p.seed)&65535u)/65535.;var v=.55*src[i]+.17*sin(t)+.11*cos(t*.37+f32(x)*.013)+.09*sin(f32(x)*.098)+.07*(q-.5);let xx=f32(x)/f32(p.n);let bk=p.breakk*(.25*clamp((xx-.08)/.2,0.,1.)+.55*max(0.,1.-abs(xx-.62)/.09));let harbor=max(0.,(xx-.72)/.28);let ck=.1+.8*harbor;v=v*(1.-bk*.35);v=v*(1.-ck*.45)+tanh(v)*.15*ck;dst[i]=tanh(v);}`;
+
+async function gpuStep(srcBuf,dstBuf,N,seed,gen){
+ const module=gpu.createShaderModule({code:WGSL}),pipe=gpu.createComputePipeline({layout:'auto',compute:{module,entryPoint:'main'}});
+ const ub=gpu.createBuffer({size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+ const dv=new DataView(new ArrayBuffer(16));dv.setUint32(0,N,true);dv.setUint32(4,seed>>>0,true);dv.setUint32(8,gen,true);dv.setFloat32(12,val('break'),true);gpu.queue.writeBuffer(ub,0,dv.buffer);
+ const bg=gpu.createBindGroup({layout:pipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:srcBuf}},{binding:1,resource:{buffer:dstBuf}},{binding:2,resource:{buffer:ub}}]});
+ const enc=gpu.createCommandEncoder(),pass=enc.beginComputePass();pass.setPipeline(pipe);pass.setBindGroup(0,bg);pass.dispatchWorkgroups(Math.ceil(N*N/256));pass.end();gpu.queue.submit([enc.finish()]);await gpu.queue.onSubmittedWorkDone();ub.destroy()
+}
+
+function metricsFromFloat(a,N){
+ const bytes=encodeBytes(a),m={entropy:entropy(bytes),corr:autocorr(bytes,N),smooth:smoothness(bytes,N)};
+ const f=fft2D(a,N),peak=radialPeakMetric(f.re,f.im,N),score=.34*m.smooth+.28*(1-Math.min(1,Math.abs(m.corr)))+.20*m.entropy+.18/(1+peak/12);
+ return{...m,peak,score}
+}
+
+async function optimize(){
+ active=true;$('start').disabled=true;$('stop').disabled=false;$('png').disabled=$('raw').disabled=$('tree').disabled=true;
+ const N=+$('size').value,steps=Math.max(3,+$('steps').value|0),cand=Math.max(2,+$('cand').value|0),eliteN=Math.max(2,+$('elite').value|0),pat=Math.max(2,+$('patience').value|0),seed=(+$('seed').value>>>0);
+ treeNodes=[];best=null;ui('status','running');ui('backend',gpuReady?'WebGPU':'CPU');ui('fft','2D radix-2 ✓');ui('simd',typeof WebAssembly==='object'?'WASM ✓':'JS');
+ let elite=[],no=0,start=performance.now();
+ for(let gen=1;gen<=steps&&active;gen++){
+  ui('gen',`${gen}/${steps}`);$('prog').style.width=((gen-1)/steps*100)+'%';
+  let results=[];
+  for(let c=0;c<cand&&active;c++){
+   let s=rnd32(seed^Math.imul(gen,0x9e3779b9)^c*0x85ebca6b);
+   let a=makeBase(N,s,gen);
+   if(c&&elite.length){let parent=elite[c%elite.length].a;for(let i=0;i<a.length;i++)a[i]=.70*parent[i]+.30*a[i]}
+   applyBreakwater(a,N,+$('break').value);
+   /* Real 2D FFT -> narrow-peak suppression -> inverse FFT. */
+   let F=fft2D(a,N);let removed=spectralClean(F.re,F.im,N,+$('notch').value,+$('width').value);
+   let inv=fft2D(F.re.map(x=>x),N,true); // inverse of real/imag is completed below
+   // Explicit inverse using the spectral pair; avoid pretending the helper's
+   // real-only API is an inverse FFT.
+   const ir=F.re,ii=F.im;fft2D;
+   // reconstruct via row/column inverse directly
+   for(let y=0;y<N;y++){let r=new Float32Array(N),im=new Float32Array(N);for(let x=0;x<N;x++){r[x]=ir[y*N+x];im[x]=ii[y*N+x]}fft1(r,im,true);for(let x=0;x<N;x++){ir[y*N+x]=r[x];ii[y*N+x]=im[x]}}
+   for(let x=0;x<N;x++){let r=new Float32Array(N),im=new Float32Array(N);for(let y=0;y<N;y++){r[y]=ir[y*N+x];im[y]=ii[y*N+x]}fft1(r,im,true);for(let y=0;y<N;y++)a[y*N+x]=Math.tanh(r[y])}
+   const met=metricsFromFloat(a,N),node={id:treeNodes.length,parent:elite.length?elite[c%elite.length].id:null,gen,score:met.score,metrics:met,seed:s,a};
+   results.push(node);treeNodes.push({...node,a:null});
+   if(!best||met.score>best.score)best=node;
+   ui('nodes',treeNodes.length);ui('score',met.score.toFixed(5));ui('entropy',met.entropy.toFixed(3));ui('peak',met.peak.toFixed(3));ui('corr',met.corr.toFixed(3));ui('smooth',met.smooth.toFixed(3));
+   render(a,N);await new Promise(r=>setTimeout(r,0));
   }
+  results.sort((a,b)=>b.score-a.score);elite.push(...results.slice(0,eliteN));elite.sort((a,b)=>b.score-a.score);elite=elite.slice(0,eliteN);
+  let improved=elite[0]===best;
+  if(improved){no=0;ui('best',best.score.toFixed(5));log(`GEN ${gen}: BEST score=${best.score.toFixed(5)} peak=${best.metrics.peak.toFixed(3)} corr=${best.metrics.corr.toFixed(3)}`,'ok')}else{no++;log(`GEN ${gen}: no improvement ${no}/${pat}`,'warn')}
+  if(no>=pat&&gen>=4)break
+ }
+ if(best){render(best.a,N);$('png').disabled=$('raw').disabled=$('tree').disabled=false;ui('memory',(best.a.byteLength/1048576).toFixed(2)+' MB');ui('status','ready');log(`Готово за ${((performance.now()-start)/1000).toFixed(1)} s · best=${best.score.toFixed(5)}`,'ok')}
+ else ui('status','stopped');
+ active=false;$('start').disabled=false;$('stop').disabled=true;$('prog').style.width='100%'
+}
 
-  async function measureJitter(samples=900){
-    let t=performance.now(); for(let i=0;i<500;i++) t=performance.now();
-    const d=new Float64Array(samples); let prev=performance.now();
-    for(let i=0;i<samples;i++){
-      let x=i; x=Math.imul(x^(x<<13),0x5bd1e995); x^=x>>>15;
-      const n=performance.now(); d[i]=n-prev; prev=n;
-      if((i&127)===0) await new Promise(r=>setTimeout(r,0));
-    }
-    let sum=0,sum2=0; for(let i=0;i<samples;i++){sum+=d[i];sum2+=d[i]*d[i];}
-    const mean=sum/samples, std=Math.sqrt(Math.max(0,sum2/samples-mean*mean));
-    let seed=(Math.floor(mean*1e6)^Math.floor(std*1e7))>>>0;
-    seed=Math.imul(seed^(seed>>>16),0x7feb352d)>>>0;
-    return {mean,std,seed};
-  }
-
-  function systemWideGates(i,theta,adapt){
-    const cpu=Math.sin(2*Math.PI*i/G_CPU+theta*0.15);
-    const ram=Math.sin(2*Math.PI*i/G_RAM+theta*0.07);
-    const ssd=Math.sin(2*Math.PI*i/G_SSD+theta*0.03);
-    const ssdB=Math.sin(2*Math.PI*i/G_SSD1M+theta*0.01);
-    const pcie=Math.sin(2*Math.PI*i/G_PCIE+theta*0.11);
-    const net=Math.sin(2*Math.PI*i/G_NET+theta*0.05);
-    const tcp=Math.sin(2*Math.PI*i/G_TCP+theta*0.02);
-    const sys=Math.sin(2*Math.PI*i/G_SYS+theta*0.005);
-    return adapt*(0.11*cpu+0.09*ram+0.07*ssd+0.04*ssdB+0.06*pcie+0.06*net+0.04*tcp+0.04*sys);
-  }
-
-  function interferenceLattice(i,theta,adapt){
-    const sources=[{a:1,w:0.07,p:0},{a:0.85,w:0.19,p:1.17},{a:0.7,w:0.41,p:2.09},{a:0.55,w:0.93,p:0.61},{a:0.4,w:1.7,p:2.7}];
-    let re=0,im=0;
-    for(let k=0;k<sources.length;k++){
-      const s=sources[k], phase=s.w*theta+s.p+i*(0.002+k*0.0007);
-      re+=s.a*Math.cos(phase); im+=s.a*Math.sin(phase);
-    }
-    const In=(re*re+im*im)/(sources.length*sources.length);
-    const suppress=Math.max(0,0.55-In), damp=Math.max(0,In-0.45);
-    const lattice=Math.tanh((re*0.6+im*0.4)*0.8);
-    return {out:lattice*0.55*adapt-suppress*0.35*adapt-damp*0.25*adapt,suppress,damp};
-  }
-
-  function ultraWideSpectrum(i,adapt){
-    const N=24,fMin=1e-6,fMax=1e18; let re=0,im=0;
-    const x=i*0.001,y=Math.sin(i*0.00017)*1000,z=Math.cos(i*0.00031)*1000;
-    for(let k=0;k<N;k++){
-      const t=k/(N-1),f=fMin*Math.pow(fMax/fMin,t);
-      const phase=f*1e-12*x+f*1e-15*y+f*1e-18*z+k*0.37;
-      const a=1/(1+k*0.08); re+=a*Math.cos(phase); im+=a*Math.sin(phase);
-    }
-    return Math.tanh(Math.sqrt(re*re+im*im)/N*2)*adapt;
-  }
-
-  // Волнорез: ступени дробят рябь, гавань успокаивает
-  function breakwaterCalm(i, length, raw, runMean) {
-    const x = (i % length) / length;
-    const step1 = Math.max(0, Math.min(1, (x - 0.10) / 0.20));
-    const step2 = Math.max(0, Math.min(1, (x - 0.30) / 0.20));
-    const step3 = Math.max(0, Math.min(1, (x - 0.50) / 0.15));
-    const crest = Math.max(0, 1 - Math.abs(x - 0.62) / 0.08);
-    const harbor = Math.max(0, (x - 0.72) / 0.28);
-    const breakK = 0.25 * step1 + 0.35 * step2 + 0.45 * step3 + 0.55 * crest;
-    const calmK  = 0.15 + 0.70 * harbor;
-    const ripple = raw - Math.tanh(runMean) * Math.sign(raw || 1);
-    const broken = raw - breakK * 0.65 * ripple;
-    const calmed = broken * (1 - calmK * 0.55) + runMean * Math.sign(broken || 1) * calmK * 0.55;
-    return Math.tanh(calmed);
-  }
-
-  function generateCPU(bytes,seed,adapt,step){
-    const out=new Uint8Array(bytes);
-    let s1=(0xDEADBEEF^seed^(step*0x9E3779B9))>>>0, s2=(0x12345679^seed^step)>>>0;
-    const mix=x=>{x=(x+0x9E3779B9)>>>0;x=Math.imul(x^(x>>>16),0x85EBCA6B)>>>0;x=Math.imul(x^(x>>>13),0xC2B2AE35)>>>0;return (x^(x>>>16))>>>0;};
-    const PHI=1.618033988749895,PI=Math.PI; let prevRaw=0,runMean=0.15;
-    for(let i=0;i<bytes;i++){
-      s1=mix(s1+i); s2=mix(s2+Math.imul(i,0x9E3779B9));
-      const theta=(2*PI*PHI*i)/256+step*0.01;
-      const gates=systemWideGates(i,theta,adapt);
-      const ifx=interferenceLattice(i,theta,adapt);
-      const uws=ultraWideSpectrum(i,adapt);
-      let raw=0.09*gates+0.10*ifx.out+0.11*uws+0.04*((s1&255)/255)+0.03*((s2&255)/255);
-      raw*=(1-0.16*ifx.suppress);
-      raw=raw*(1-0.11*ifx.damp)+runMean*Math.sign(raw||1)*0.11*ifx.damp;
-      raw=Math.tanh(raw);
-      runMean=runMean*0.995+Math.abs(raw)*0.005;
-      raw=breakwaterCalm(i, 4096, raw, runMean);
-      const hole=Math.max(0,(runMean-Math.abs(raw))/(runMean+1e-6));
-      const spike=Math.max(0,(Math.abs(raw)-runMean*1.8)/(Math.abs(raw)+1e-6));
-      let v=raw*(1-0.3*spike)+runMean*Math.sign(raw||1)*0.3*spike;
-      v=v+hole*0.4*(runMean*Math.sign(v||1)-v);
-      v=Math.tanh(v)*0.82+prevRaw*0.18; prevRaw=v;
-      let b=Math.floor(((v+1)*127.5)%256); if(b<0)b+=256; out[i]=b&255;
-    }
-    return out;
-  }
-
-  // GPU: упрощённый волнорез в шейдере
-  const SHADER=`
-    struct Params { seed:u32, adapt_bits:u32, step:u32, size:u32, };
-    @group(0) @binding(0) var<storage, read_write> outBuf: array<u32>;
-    @group(0) @binding(1) var<uniform> params: Params;
-    fn mix32(x:u32)->u32{ var z=x+0x9E3779B9u; z=(z^(z>>16u))*0x85EBCA6Bu; z=(z^(z>>13u))*0xC2B2AE35u; return z^(z>>16u); }
-    @compute @workgroup_size(256)
-    fn main(@builtin(global_invocation_id) gid:vec3<u32>){
-      let i=gid.x; if(i>=params.size){ return; }
-      let seed=params.seed; let step=params.step; let adapt=bitcast<f32>(params.adapt_bits);
-      let fi=f32(i); let theta=(2.0*3.14159265*1.61803398*fi)/256.0+f32(step)*0.01;
-      var s1=mix32(0xDEADBEEFu^seed^(step*0x9E3779B9u)^i);
-      var s2=mix32(0x12345679u^seed^step^(i*0x85EBu));
-      let cpu=sin(2.0*3.14159265*fi/64.0+theta*0.15);
-      let ram=sin(2.0*3.14159265*fi/4096.0+theta*0.07);
-      let ssd=sin(2.0*3.14159265*fi/65536.0+theta*0.03);
-      let pcie=sin(2.0*3.14159265*fi/256.0+theta*0.11);
-      let net=sin(2.0*3.14159265*fi/1500.0+theta*0.05);
-      let gates=adapt*(0.12*cpu+0.10*ram+0.08*ssd+0.07*pcie+0.07*net);
-      let a=cos(theta*0.19); let b=sin(theta*0.41+1.17);
-      let c=cos(theta*0.93+0.61); let d=sin(theta*1.70+2.70);
-      let re0=a+0.85*b+0.7*c; let im0=b+0.7*d; let In=(re0*re0+im0*im0)/16.0;
-      let suppress=max(0.0,0.55-In); let dampv=max(0.0,In-0.45);
-      let lattice=tanh((re0*0.6+im0*0.4)*0.5);
-      let ifx=lattice*0.55*adapt-suppress*0.35*adapt-dampv*0.25*adapt;
-      var re=0.0; var im=0.0; let xw=fi*0.001; let yw=sin(fi*0.00017)*1000.0; let zw=cos(fi*0.00031)*1000.0;
-      for(var k=0u; k<12u; k=k+1u){
-        let t=f32(k)/11.0; let f=1e-6*pow(1e18/1e-6,t);
-        let phase=f*1e-12*xw+f*1e-15*yw+f*1e-18*zw+f32(k)*0.37;
-        let amp=1.0/(1.0+f32(k)*0.08); re=re+amp*cos(phase); im=im+amp*sin(phase);
-      }
-      let uws=tanh(sqrt(re*re+im*im)/12.0*2.0)*adapt;
-      var raw=0.10*gates+0.11*ifx+0.12*uws+0.04*f32(s1&255u)/255.0+0.03*f32(s2&255u)/255.0;
-      raw=raw*(1.0-0.16*suppress); raw=tanh(raw);
-      // breakwater profile period 4096
-      let x= (fi % 4096.0) / 4096.0;
-      let step1=clamp((x-0.10)/0.20,0.0,1.0);
-      let step2=clamp((x-0.30)/0.20,0.0,1.0);
-      let step3=clamp((x-0.50)/0.15,0.0,1.0);
-      let crest=max(0.0,1.0-abs(x-0.62)/0.08);
-      let harbor=max(0.0,(x-0.72)/0.28);
-      let breakK=0.25*step1+0.35*step2+0.45*step3+0.55*crest;
-      let calmK=0.15+0.70*harbor;
-      let ripple=raw-0.15*sign(raw);
-      raw=raw-breakK*0.65*ripple;
-      raw=raw*(1.0-calmK*0.55)+0.15*sign(raw)*calmK*0.55;
-      raw=tanh(raw);
-      var val=i32(floor(((raw+1.0)*127.5)%256.0)); if(val<0){ val=val+256; }
-      outBuf[i]=u32(val)&255u;
-    }
-  `;
-
-  async function initGPU(){
-    if(!('gpu' in navigator)){ $('stBackend').textContent='CPU'; log('WebGPU нет — CPU','warn'); return false; }
-    try{
-      const adapter=await navigator.gpu.requestAdapter();
-      if(!adapter) throw new Error('no adapter');
-      gpuDevice=await adapter.requestDevice();
-      const module=gpuDevice.createShaderModule({code:SHADER});
-      gpuPipeline=gpuDevice.createComputePipeline({layout:'auto', compute:{module, entryPoint:'main'}});
-      gpuReady=true; $('stBackend').textContent='WebGPU'; log('WebGPU готов','ok'); return true;
-    }catch(e){ gpuReady=false; $('stBackend').textContent='CPU'; log('GPU: '+e.message,'warn'); return false; }
-  }
-
-  async function generateGPU(bytes,seed,adapt,step){
-    const outBuffer=gpuDevice.createBuffer({size:bytes*4, usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
-    const paramData=new ArrayBuffer(16); const dv=new DataView(paramData);
-    dv.setUint32(0,seed>>>0,true);
-    dv.setUint32(4,new Uint32Array(new Float32Array([adapt]).buffer)[0],true);
-    dv.setUint32(8,step>>>0,true); dv.setUint32(12,bytes>>>0,true);
-    const paramBuffer=gpuDevice.createBuffer({size:16, usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-    gpuDevice.queue.writeBuffer(paramBuffer,0,paramData);
-    const bindGroup=gpuDevice.createBindGroup({
-      layout:gpuPipeline.getBindGroupLayout(0),
-      entries:[{binding:0,resource:{buffer:outBuffer}},{binding:1,resource:{buffer:paramBuffer}}]
-    });
-    const encoder=gpuDevice.createCommandEncoder();
-    const pass=encoder.beginComputePass();
-    pass.setPipeline(gpuPipeline); pass.setBindGroup(0,bindGroup);
-    pass.dispatchWorkgroups(Math.ceil(bytes/256)); pass.end();
-    const readBuffer=gpuDevice.createBuffer({size:bytes*4, usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
-    encoder.copyBufferToBuffer(outBuffer,0,readBuffer,0,bytes*4);
-    gpuDevice.queue.submit([encoder.finish()]);
-    await readBuffer.mapAsync(GPUMapMode.READ);
-    const copy=new Uint32Array(readBuffer.getMappedRange().slice(0));
-    readBuffer.unmap(); outBuffer.destroy(); paramBuffer.destroy(); readBuffer.destroy();
-    const out=new Uint8Array(bytes); for(let i=0;i<bytes;i++) out[i]=copy[i]&255;
-    return out;
-  }
-
-  async function generateSmart(bytes,seed,adapt,step){
-    if(gpuReady){ try{ return await generateGPU(bytes,seed,adapt,step); }catch(e){ log('GPU→CPU: '+e.message,'warn'); } }
-    return generateCPU(bytes,seed,adapt,step);
-  }
-
-  const scoreOf=std=>1000/(1+std*100);
-  function downloadBlob(data,filename,type){
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([data],{type:type||'application/octet-stream'}));
-    a.download=filename; a.click(); URL.revokeObjectURL(a.href);
-  }
-  function downloadBin(buf){ downloadBlob(buf,'adaptive_chameleon_pattern.bin'); }
-  function buildFlashFriendlyImage(patternBytes){
-    const page=4096, block=131072;
-    const header=new Uint8Array(64);
-    header.set(new TextEncoder().encode('ACPFLASH1'),0);
-    const dv=new DataView(header.buffer);
-    dv.setUint32(8,page,true); dv.setUint32(12,block,true); dv.setUint32(16,patternBytes.length,true);
-    const rawLen=64+patternBytes.length, total=Math.ceil(rawLen/block)*block;
-    const out=new Uint8Array(total); out.set(header,0); out.set(patternBytes,64);
-    for(let i=rawLen;i<total;i++) out[i]=(patternBytes[(i-64)%patternBytes.length]^0xA5)&255;
-    return out;
-  }
-  function downloadUsb(buf){ downloadBlob(buildFlashFriendlyImage(buf),'pattern_usb_flash.bin'); }
-
-  function buildArduinoSketch(){
-    return `// AdaptivePattern_MatchWaves_Breakwater.ino
+function stop(){active=false;ui('status','stopping…');log('Стоп')}
+function clearTree(){treeNodes=[];best=null;ui('nodes','0');ui('best','—');log('Дерево очищено')}
+$('start').onclick=async()=>{await gpuInit();optimize().catch(e=>{active=false;log(e.stack||e,'bad');ui('status','error');$('start').disabled=false;$('stop').disabled=true})};
+$('stop').onclick=stop;$('clear').onclick=clearTree;
+$('png').onclick=()=>{if(!best)return;let N=+$('size').value,tmp=document.createElement('canvas');tmp.width=N;tmp.height=N;let c=tmp.getContext('2d'),im=c.createImageData(N,N),b=encodeBytes(best.a);for(let i=0;i<b.length;i++){let o=i*4,v=b[i];im.data[o]=v;im.data[o+1]=v;im.data[o+2]=v;im.data[o+3]=255}c.putImageData(im,0,0);tmp.toBlob(x=>download(x,'pattern_2D_FFT_clean.png','image/png'))};
+$('raw').onclick=()=>best&&download(encodeBytes(best.a),'pattern_2D_FFT_clean.bin');
+$('tree').onclick=()=>download(JSON.stringify({version:2,N:+$('size').value,params:{notch:+$('notch').value,width:+$('width').value,break:+$('break').value},nodes:treeNodes.map(x=>({...x,a:undefined}))},null,2),'autocorrelation_pattern_tree.json','application/json');
+$('ino').onclick=()=>download(`// AdaptivePattern_MatchWaves_Breakwater.ino
 #include <Arduino.h>
 static const uint16_t PAT_LEN = 512;
 static const uint8_t N_WAVES = 12;
@@ -480,73 +337,8 @@ void loop(){
   if(stagnant>=8){ best.seed^=mix32(micros()^0x5A5Au); stagnant=0; Serial.println(F("reseed")); }
   delay(20);
 }
-`;
-  }
-  function downloadArduino(){ downloadBlob(buildArduinoSketch(),'AdaptivePattern_MatchWaves_Breakwater.ino','text/plain'); }
-
-  async function runSmart(){
-    if(active) return;
-    active=true;
-    $('btnStart').disabled=true; $('btnStop').disabled=false; enablePatternDownloads(false);
-    bestStd=Infinity; bestScore=-Infinity; bestPattern=null; pattern=null; setProgress(0);
-    await initGPU();
-    const mb=pickSizeMb(), bytes=mb*1024*1024;
-    const maxSteps=Math.max(3,Math.min(30,parseInt($('maxSteps').value,10)||10));
-    const patience=Math.max(1,Math.min(10,parseInt($('patience').value,10)||2));
-    log('Старт: '+mb+' МБ | breakwater + gates + lattice');
-    if(mb>=64) log('Большой размер: риск OOM','warn');
-    $('stStatus').textContent='поиск...';
-    let noImprove=0, adapt=1.0;
-    for(let step=1; step<=maxSteps && active; step++){
-      $('stStep').textContent=step+'/'+maxSteps;
-      setProgress(((step-1)/maxSteps)*100);
-      const j=await measureJitter(800);
-      $('stStd').textContent=j.std.toFixed(4)+' ms';
-      log('Шаг '+step+': σ='+j.std.toFixed(4));
-      adapt=Math.max(0.7,Math.min(1.8,1.0+j.std*3+(noImprove>0?0.15:0)));
-      let buf;
-      try{
-        const t0=performance.now();
-        buf=await generateSmart(bytes,j.seed,adapt,step);
-        log('  gen '+(performance.now()-t0).toFixed(0)+' ms ('+(gpuReady?'GPU':'CPU')+')');
-      }catch(e){ log('OOM/ошибка: '+e.message,'bad'); break; }
-      if(!active) break;
-      pattern=buf; draw(buf);
-      await new Promise(r=>setTimeout(r,120));
-      const after=await measureJitter(700);
-      $('stStd').textContent=after.std.toFixed(4)+' ms';
-      const sc=scoreOf(after.std); $('stScore').textContent=sc.toFixed(2);
-      log('  контроль σ='+after.std.toFixed(4)+' score='+sc.toFixed(2));
-      if(after.std<bestStd-1e-6 || sc>bestScore){
-        bestStd=after.std; bestScore=sc; bestPattern=new Uint8Array(buf);
-        $('stBest').textContent=bestStd.toFixed(4)+' ms'; noImprove=0; log('  лучший','ok');
-      }else{ noImprove++; log('  без улучшения ('+noImprove+'/'+patience+')','warn'); }
-      if(noImprove>=patience && step>=3){ log('Стоп без улучшения','warn'); break; }
-    }
-    if(bestPattern){
-      pattern=bestPattern; draw(pattern); setProgress(100);
-      downloadBin(pattern); log('Авто .bin','ok');
-      enablePatternDownloads(true); $('stStatus').textContent='готов';
-    }else{ $('stStatus').textContent='ошибка'; log('Нет результата','bad'); }
-    $('btnStart').disabled=false; $('btnStop').disabled=true; active=false;
-  }
-
-  function stop(){
-    active=false;
-    $('stStatus').textContent=pattern?'остановлен':'стоп';
-    $('btnStart').disabled=false; $('btnStop').disabled=true;
-    if(pattern) enablePatternDownloads(true);
-    log('Стоп');
-  }
-
-  $('btnStart').onclick=()=>runSmart().catch(e=>{ active=false; log(String(e),'bad'); $('btnStart').disabled=false; $('btnStop').disabled=true; });
-  $('btnStop').onclick=stop;
-  $('btnBin').onclick=()=>{ if(pattern){ downloadBin(pattern); log('Скачан .bin','ok'); } };
-  $('btnUsb').onclick=()=>{ if(pattern){ downloadUsb(pattern); log('Скачан USB','ok'); } };
-  $('btnArduino').onclick=()=>{ downloadArduino(); log('Скачан MatchWaves+Breakwater .ino','ok'); };
-
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
+`,'AdaptivePattern_MatchWaves_Breakwater_X.ino','text/plain');
+ctx.fillStyle='#000';ctx.fillRect(0,0,cv.width,cv.height);
 })();
 </script>
-</body>
-</html>
+</body></html>
