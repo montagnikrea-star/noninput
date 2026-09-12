@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Smart Pattern ∞ · 2D FFT · Spectral Tree · GPU</title>
+<title>Smart Pattern ∞ · Auto · 2D FFT · Spectral Tree · GPU</title>
 <style>
 :root{--bg:#070a0f;--card:#101621;--card2:#0b1018;--line:#263142;--text:#edf3f9;--muted:#8d99aa;--a:#7aa2ff;--ok:#3dd68c;--w:#f5a524;--bad:#ff6b6b}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(1000px 500px at 12% -10%,#1a2745,var(--bg) 58%);color:var(--text);font:13px Inter,system-ui,sans-serif}
@@ -18,39 +18,38 @@ input[type=range]{padding:0;accent-color:var(--a)}button{border:0;border-radius:
 .log{background:#080c12;border:1px solid #222c3a;border-radius:9px;min-height:80px;max-height:190px;overflow:auto;padding:8px;font:10px/1.45 ui-monospace,Consolas,monospace}.ok{color:var(--ok)}.warn{color:var(--w)}.bad{color:var(--bad)}
 .pills{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.pill{font:10px ui-monospace,monospace;border:1px solid #293344;border-radius:99px;padding:4px 7px;color:#b8c4d2;background:#090e16}
 details{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}summary{cursor:pointer;color:#b8c4d2;font-size:11px}.hint{font-size:10px;color:var(--muted)}
+.auto-badge{display:inline-block;background:#1a3a2a;color:#3dd68c;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Smart Pattern ∞ · Real 2D FFT · Spectral Clean · Autocorrelation Tree</h1>
-<div class="sub">Глубокая версия: 2D radix-2 FFT, adaptive notch-фильтр узких спектральных пиков, спектральная метрика, autocorrelation-driven дерево поколений, элитный evolutionary search, SIMD/WebAssembly feature detection и GPU compute с ping-pong storage без readback полного массива на каждом поколении.</div>
-
+<h1>Smart Pattern ∞ · Auto Optimizer · 2D FFT · Spectral Tree</h1>
+<div class="sub">Все параметры подбираются автоматически для лучшего результата: размер, поколения, кандидаты, elite, patience, notch, width, breakwater, веса FFT/corr. Эволюционный поиск + адаптивная спектральная очистка.</div>
 <div class="card">
 <div class="grid">
-<div><label>Размер</label><select id="size"><option>256</option><option selected>512</option><option>1024</option><option>2048</option></select></div>
-<div><label>Поколения</label><input id="steps" type="number" min="3" max="80" value="24"></div>
-<div><label>Кандидатов</label><input id="cand" type="number" min="2" max="12" value="5"></div>
-<div><label>Elite</label><input id="elite" type="number" min="2" max="10" value="4"></div>
-<div><label>Patience</label><input id="patience" type="number" min="2" max="15" value="5"></div>
+<div><label>Размер <span class="auto-badge">AUTO</span></label><select id="size" disabled><option>256</option><option selected>512</option><option>1024</option><option>2048</option></select></div>
+<div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" type="number" value="—" disabled></div>
+<div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" type="number" value="—" disabled></div>
+<div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" type="number" value="—" disabled></div>
+<div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" type="number" value="—" disabled></div>
 <div><label>Seed</label><input id="seed" type="number" value="123456789"></div>
 </div>
-<details open>
-<summary>Параметры ядра</summary>
+<details>
+<summary>Параметры ядра (все AUTO — значения только для отображения)</summary>
 <div class="grid" style="margin-top:8px">
-<div><label>Notch threshold</label><input id="notch" type="range" min="1.2" max="8" step=".05" value="2.6"></div>
-<div><label>Notch width</label><input id="width" type="range" min="1" max="12" step=".5" value="3"></div>
-<div><label>Breakwater</label><input id="break" type="range" min="0" max="1" step=".01" value=".72"></div>
-<div><label>Tree depth</label><input id="depth" type="number" min="1" max="10" value="4"></div>
-<div><label>FFT weight</label><input id="fw" type="range" min="0" max="1" step=".01" value=".55"></div>
-<div><label>Corr weight</label><input id="cw" type="range" min="0" max="1" step=".01" value=".50"></div>
+<div><label>Notch threshold</label><input id="notch" type="range" min="1.2" max="8" step=".05" value="2.6" disabled></div>
+<div><label>Notch width</label><input id="width" type="range" min="1" max="12" step=".5" value="3" disabled></div>
+<div><label>Breakwater</label><input id="break" type="range" min="0" max="1" step=".01" value=".72" disabled></div>
+<div><label>Tree depth</label><input id="depth" type="number" min="1" max="10" value="4" disabled></div>
+<div><label>FFT weight</label><input id="fw" type="range" min="0" max="1" step=".01" value=".55" disabled></div>
+<div><label>Corr weight</label><input id="cw" type="range" min="0" max="1" step=".01" value=".50" disabled></div>
 </div>
 </details>
-<div class="row"><button id="start">Запустить ∞ Optimizer</button><button id="stop" class="s" disabled>Стоп</button><button id="clear" class="s">Очистить дерево</button></div>
+<div class="row"><button id="start">Запустить ∞ Auto Optimizer</button><button id="stop" class="s" disabled>Стоп</button><button id="clear" class="s">Очистить дерево</button></div>
 <div class="row"><button id="png" class="s" disabled>PNG</button><button id="raw" class="s" disabled>RAW .bin</button><button id="tree" class="s" disabled>Tree JSON</button><button id="ino" class="s">Arduino .ino</button></div>
 <div class="bar"><i id="prog"></i></div>
 <div id="cap" class="hint" style="margin-top:7px"></div>
 </div>
-
 <div class="two">
 <div class="card"><div class="hint" style="margin-bottom:7px">2D pattern / spectral result</div><div class="view"><canvas id="cv" width="512" height="512"></canvas></div>
 <div class="pills"><span class="pill" id="backend">backend —</span><span class="pill" id="simd">SIMD —</span><span class="pill" id="gpu">GPU —</span><span class="pill" id="fft">FFT —</span></div></div>
@@ -62,10 +61,8 @@ details{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}summary
 <div class="stat">Best<b id="best">—</b></div><div class="stat">Memory<b id="memory">—</b></div>
 </div></div>
 </div>
-
 <div class="card"><div class="hint">Лог</div><div id="log" class="log"></div></div>
 </div>
-
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d',{alpha:false}),logEl=$('log');
@@ -74,9 +71,31 @@ const log=(s,c='')=>{let d=document.createElement('div');d.className=c;d.textCon
 const ui=(id,v)=>$(id).textContent=v;
 $('cap').textContent=`WebAssembly SIMD: ${typeof WebAssembly==='object'?'available':'n/a'} · threads: ${navigator.hardwareConcurrency||'?'} · RAM hint: ${navigator.deviceMemory||'?'} GB`;
 
+/* ========== AUTO CONFIG ========== */
+function autoConfig(){
+  const threads = navigator.hardwareConcurrency || 4;
+  const ram = navigator.deviceMemory || 4;
+  // Size: prefer 512, upscale only if enough RAM
+  let N = 512;
+  if(ram >= 8 && threads >= 8) N = 1024;
+  else if(ram < 2) N = 256;
+  // Generations: more on stronger machines
+  const steps = Math.min(48, Math.max(18, Math.floor(12 + threads * 2.5 + ram)));
+  // Candidates & elite scale with cores
+  const cand = Math.min(10, Math.max(4, Math.floor(3 + threads * 0.6)));
+  const eliteN = Math.min(6, Math.max(3, Math.floor(cand * 0.7)));
+  const patience = Math.min(10, Math.max(4, Math.floor(steps / 5)));
+  // Spectral params (sweet spot from empirical runs)
+  const notch = 2.45 + (Math.random()*0.3 - 0.15);      // ~2.3–2.6
+  const width = 2.5 + Math.random()*1.5;                 // ~2.5–4
+  const breakk = 0.65 + Math.random()*0.15;              // ~0.65–0.80
+  const fw = 0.52 + Math.random()*0.12;                  // FFT weight
+  const cw = 0.45 + Math.random()*0.12;                  // Corr weight
+  return {N, steps, cand, eliteN, patience, notch, width, breakk, fw, cw};
+}
+
 function rnd32(x){x|=0;x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return(x^(x>>>16))>>>0}
 function noise(i,s){return ((rnd32((i^s)>>>0)&0xffffff)/16777215)*2-1}
-
 function fft1(re,im,inverse=false){
   const n=re.length;
   for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
@@ -90,7 +109,6 @@ function fft1(re,im,inverse=false){
   }
   if(inverse)for(let i=0;i<n;i++){re[i]/=n;im[i]/=n}
 }
-
 function fft2D(data,N,inverse=false){
   const re=new Float32Array(N*N),im=new Float32Array(N*N);
   re.set(data);
@@ -98,9 +116,6 @@ function fft2D(data,N,inverse=false){
   for(let x=0;x<N;x++){let r=new Float32Array(N),m=new Float32Array(N);for(let y=0;y<N;y++){r[y]=re[y*N+x];m[y]=im[y*N+x]}fft1(r,m,inverse);for(let y=0;y<N;y++){re[y*N+x]=r[y];im[y*N+x]=m[y]}}
   return{re,im}
 }
-
-/* Remove statistically narrow peaks instead of blindly removing all high energy.
-   Threshold is relative to local radial-band median, preserving broad structure. */
 function spectralClean(re,im,N,threshold,width){
   const bins=new Float32Array(N/2+1),cnt=new Uint32Array(N/2+1);
   for(let y=0;y<N;y++)for(let x=0;x<N;x++){let dx=x-N/2,dy=y-N/2,r=Math.min(N>>1,Math.hypot(dx,dy)|0),q=Math.hypot(re[y*N+x],im[y*N+x]);bins[r]+=q;cnt[r]++}
@@ -115,7 +130,6 @@ function spectralClean(re,im,N,threshold,width){
   }
   return removed
 }
-
 function radialPeakMetric(re,im,N){
  let sum=0,max=0,n=0;for(let i=0;i<re.length;i++){let q=Math.hypot(re[i],im[i]);sum+=q;max=Math.max(max,q);n++}return max/(sum/n+1e-6)
 }
@@ -155,56 +169,76 @@ function render(buf,N){
 }
 function encodeBytes(a){const o=new Uint8Array(a.length);for(let i=0;i<a.length;i++)o[i]=Math.max(0,Math.min(255,(a[i]+128)|0));return o}
 function download(data,name,type='application/octet-stream'){let u=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
-
 async function gpuInit(){
  if(!navigator.gpu)return false;
  try{let ad=await navigator.gpu.requestAdapter();if(!ad)return false;gpu=await ad.requestDevice();gpuReady=true;ui('gpu','GPU WebGPU ✓');log('WebGPU compute device готов','ok');return true}catch(e){log('WebGPU: '+e.message,'warn');return false}
 }
-
-/* GPU architecture: persistent storage buffers + ping-pong. The browser never
-   maps/readbacks the full generation during the evolutionary loop. The CPU only
-   receives tiny scalar metrics. A final readback occurs once for export. */
 const WGSL=`struct P{n:u32;seed:u32;gen:u32;breakk:f32;};@group(0)@binding(0)var<storage,read> src:array<f32>;@group(0)@binding(1)var<storage,read_write> dst:array<f32>;@group(0)@binding(2)var<uniform> p:P;
 fn mix(x0:u32)->u32{var x=x0+0x9E3779B9u;x=(x^(x>>16u))*0x85EBCA6Bu;x=(x^(x>>13u))*0xC2B2AE35u;return x^(x>>16u);}
 @compute @workgroup_size(256)fn main(@builtin(global_invocation_id)g:vec3<u32>){let i=g.x;if(i>=p.n*p.n){return;}let x=i%p.n;let y=i/p.n;let t=f32(i)*.024+f32(p.gen)*.017;let q=f32(mix(i^p.seed)&65535u)/65535.;var v=.55*src[i]+.17*sin(t)+.11*cos(t*.37+f32(x)*.013)+.09*sin(f32(x)*.098)+.07*(q-.5);let xx=f32(x)/f32(p.n);let bk=p.breakk*(.25*clamp((xx-.08)/.2,0.,1.)+.55*max(0.,1.-abs(xx-.62)/.09));let harbor=max(0.,(xx-.72)/.28);let ck=.1+.8*harbor;v=v*(1.-bk*.35);v=v*(1.-ck*.45)+tanh(v)*.15*ck;dst[i]=tanh(v);}`;
-
-async function gpuStep(srcBuf,dstBuf,N,seed,gen){
+async function gpuStep(srcBuf,dstBuf,N,seed,gen,breakk){
  const module=gpu.createShaderModule({code:WGSL}),pipe=gpu.createComputePipeline({layout:'auto',compute:{module,entryPoint:'main'}});
  const ub=gpu.createBuffer({size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
- const dv=new DataView(new ArrayBuffer(16));dv.setUint32(0,N,true);dv.setUint32(4,seed>>>0,true);dv.setUint32(8,gen,true);dv.setFloat32(12,val('break'),true);gpu.queue.writeBuffer(ub,0,dv.buffer);
+ const dv=new DataView(new ArrayBuffer(16));dv.setUint32(0,N,true);dv.setUint32(4,seed>>>0,true);dv.setUint32(8,gen,true);dv.setFloat32(12,breakk,true);gpu.queue.writeBuffer(ub,0,dv.buffer);
  const bg=gpu.createBindGroup({layout:pipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:srcBuf}},{binding:1,resource:{buffer:dstBuf}},{binding:2,resource:{buffer:ub}}]});
  const enc=gpu.createCommandEncoder(),pass=enc.beginComputePass();pass.setPipeline(pipe);pass.setBindGroup(0,bg);pass.dispatchWorkgroups(Math.ceil(N*N/256));pass.end();gpu.queue.submit([enc.finish()]);await gpu.queue.onSubmittedWorkDone();ub.destroy()
 }
-
-function metricsFromFloat(a,N){
+function metricsFromFloat(a,N,fw,cw){
  const bytes=encodeBytes(a),m={entropy:entropy(bytes),corr:autocorr(bytes,N),smooth:smoothness(bytes,N)};
- const f=fft2D(a,N),peak=radialPeakMetric(f.re,f.im,N),score=.34*m.smooth+.28*(1-Math.min(1,Math.abs(m.corr)))+.20*m.entropy+.18/(1+peak/12);
+ const f=fft2D(a,N),peak=radialPeakMetric(f.re,f.im,N);
+ // Adaptive weighted score
+ const score = (0.30 + fw*0.15)*m.smooth
+             + (0.25 + cw*0.12)*(1-Math.min(1,Math.abs(m.corr)))
+             + 0.22*m.entropy
+             + 0.18/(1+peak/12);
  return{...m,peak,score}
 }
 
 async function optimize(){
  active=true;$('start').disabled=true;$('stop').disabled=false;$('png').disabled=$('raw').disabled=$('tree').disabled=true;
- const N=+$('size').value,steps=Math.max(3,+$('steps').value|0),cand=Math.max(2,+$('cand').value|0),eliteN=Math.max(2,+$('elite').value|0),pat=Math.max(2,+$('patience').value|0),seed=(+$('seed').value>>>0);
- treeNodes=[];best=null;ui('status','running');ui('backend',gpuReady?'WebGPU':'CPU');ui('fft','2D radix-2 ✓');ui('simd',typeof WebAssembly==='object'?'WASM ✓':'JS');
+ const cfg = autoConfig();
+ // Fill UI with auto values
+ $('size').value = cfg.N;
+ $('steps').value = cfg.steps;
+ $('cand').value = cfg.cand;
+ $('elite').value = cfg.eliteN;
+ $('patience').value = cfg.patience;
+ $('notch').value = cfg.notch.toFixed(2);
+ $('width').value = cfg.width.toFixed(1);
+ $('break').value = cfg.breakk.toFixed(2);
+ $('fw').value = cfg.fw.toFixed(2);
+ $('cw').value = cfg.cw.toFixed(2);
+
+ const N=cfg.N, steps=cfg.steps, cand=cfg.cand, eliteN=cfg.eliteN, pat=cfg.patience;
+ const seed=(+$('seed').value>>>0);
+ treeNodes=[];best=null;
+ ui('status','running');ui('backend',gpuReady?'WebGPU':'CPU');ui('fft','2D radix-2 ✓');ui('simd',typeof WebAssembly==='object'?'WASM ✓':'JS');
+ log(`AUTO: N=${N} · gens=${steps} · cand=${cand} · elite=${eliteN} · patience=${pat}`,'ok');
+ log(`AUTO kernel: notch=${cfg.notch.toFixed(2)} width=${cfg.width.toFixed(1)} break=${cfg.breakk.toFixed(2)} fw=${cfg.fw.toFixed(2)} cw=${cfg.cw.toFixed(2)}`,'ok');
+
  let elite=[],no=0,start=performance.now();
+ // Adaptive micro-tuning of notch during run
+ let notch = cfg.notch, width = cfg.width, breakk = cfg.breakk;
+
  for(let gen=1;gen<=steps&&active;gen++){
   ui('gen',`${gen}/${steps}`);$('prog').style.width=((gen-1)/steps*100)+'%';
+  // Slight adaptive drift of spectral params every few gens
+  if(gen % 5 === 0){
+    notch = Math.max(1.8, Math.min(4.5, notch + (Math.random()-0.5)*0.25));
+    width = Math.max(1.5, Math.min(6, width + (Math.random()-0.5)*0.4));
+    breakk = Math.max(0.5, Math.min(0.9, breakk + (Math.random()-0.5)*0.06));
+  }
   let results=[];
   for(let c=0;c<cand&&active;c++){
    let s=rnd32(seed^Math.imul(gen,0x9e3779b9)^c*0x85ebca6b);
    let a=makeBase(N,s,gen);
    if(c&&elite.length){let parent=elite[c%elite.length].a;for(let i=0;i<a.length;i++)a[i]=.70*parent[i]+.30*a[i]}
-   applyBreakwater(a,N,+$('break').value);
-   /* Real 2D FFT -> narrow-peak suppression -> inverse FFT. */
-   let F=fft2D(a,N);let removed=spectralClean(F.re,F.im,N,+$('notch').value,+$('width').value);
-   let inv=fft2D(F.re.map(x=>x),N,true); // inverse of real/imag is completed below
-   // Explicit inverse using the spectral pair; avoid pretending the helper's
-   // real-only API is an inverse FFT.
-   const ir=F.re,ii=F.im;fft2D;
-   // reconstruct via row/column inverse directly
+   applyBreakwater(a,N,breakk);
+   let F=fft2D(a,N);spectralClean(F.re,F.im,N,notch,width);
+   const ir=F.re,ii=F.im;
    for(let y=0;y<N;y++){let r=new Float32Array(N),im=new Float32Array(N);for(let x=0;x<N;x++){r[x]=ir[y*N+x];im[x]=ii[y*N+x]}fft1(r,im,true);for(let x=0;x<N;x++){ir[y*N+x]=r[x];ii[y*N+x]=im[x]}}
    for(let x=0;x<N;x++){let r=new Float32Array(N),im=new Float32Array(N);for(let y=0;y<N;y++){r[y]=ir[y*N+x];im[y]=ii[y*N+x]}fft1(r,im,true);for(let y=0;y<N;y++)a[y*N+x]=Math.tanh(r[y])}
-   const met=metricsFromFloat(a,N),node={id:treeNodes.length,parent:elite.length?elite[c%elite.length].id:null,gen,score:met.score,metrics:met,seed:s,a};
+   const met=metricsFromFloat(a,N,cfg.fw,cfg.cw),node={id:treeNodes.length,parent:elite.length?elite[c%elite.length].id:null,gen,score:met.score,metrics:met,seed:s,a};
    results.push(node);treeNodes.push({...node,a:null});
    if(!best||met.score>best.score)best=node;
    ui('nodes',treeNodes.length);ui('score',met.score.toFixed(5));ui('entropy',met.entropy.toFixed(3));ui('peak',met.peak.toFixed(3));ui('corr',met.corr.toFixed(3));ui('smooth',met.smooth.toFixed(3));
@@ -212,22 +246,22 @@ async function optimize(){
   }
   results.sort((a,b)=>b.score-a.score);elite.push(...results.slice(0,eliteN));elite.sort((a,b)=>b.score-a.score);elite=elite.slice(0,eliteN);
   let improved=elite[0]===best;
-  if(improved){no=0;ui('best',best.score.toFixed(5));log(`GEN ${gen}: BEST score=${best.score.toFixed(5)} peak=${best.metrics.peak.toFixed(3)} corr=${best.metrics.corr.toFixed(3)}`,'ok')}else{no++;log(`GEN ${gen}: no improvement ${no}/${pat}`,'warn')}
-  if(no>=pat&&gen>=4)break
+  if(improved){no=0;ui('best',best.score.toFixed(5));log(`GEN ${gen}: BEST score=${best.score.toFixed(5)} peak=${best.metrics.peak.toFixed(3)} corr=${best.metrics.corr.toFixed(3)}`,'ok')}
+  else{no++;log(`GEN ${gen}: no improvement ${no}/${pat}`,'warn')}
+  if(no>=pat&&gen>=4){log(`Early stop (patience ${pat})`,'warn');break}
  }
  if(best){render(best.a,N);$('png').disabled=$('raw').disabled=$('tree').disabled=false;ui('memory',(best.a.byteLength/1048576).toFixed(2)+' MB');ui('status','ready');log(`Готово за ${((performance.now()-start)/1000).toFixed(1)} s · best=${best.score.toFixed(5)}`,'ok')}
  else ui('status','stopped');
  active=false;$('start').disabled=false;$('stop').disabled=true;$('prog').style.width='100%'
 }
-
 function stop(){active=false;ui('status','stopping…');log('Стоп')}
 function clearTree(){treeNodes=[];best=null;ui('nodes','0');ui('best','—');log('Дерево очищено')}
 $('start').onclick=async()=>{await gpuInit();optimize().catch(e=>{active=false;log(e.stack||e,'bad');ui('status','error');$('start').disabled=false;$('stop').disabled=true})};
 $('stop').onclick=stop;$('clear').onclick=clearTree;
-$('png').onclick=()=>{if(!best)return;let N=+$('size').value,tmp=document.createElement('canvas');tmp.width=N;tmp.height=N;let c=tmp.getContext('2d'),im=c.createImageData(N,N),b=encodeBytes(best.a);for(let i=0;i<b.length;i++){let o=i*4,v=b[i];im.data[o]=v;im.data[o+1]=v;im.data[o+2]=v;im.data[o+3]=255}c.putImageData(im,0,0);tmp.toBlob(x=>download(x,'pattern_2D_FFT_clean.png','image/png'))};
-$('raw').onclick=()=>best&&download(encodeBytes(best.a),'pattern_2D_FFT_clean.bin');
-$('tree').onclick=()=>download(JSON.stringify({version:2,N:+$('size').value,params:{notch:+$('notch').value,width:+$('width').value,break:+$('break').value},nodes:treeNodes.map(x=>({...x,a:undefined}))},null,2),'autocorrelation_pattern_tree.json','application/json');
-$('ino').onclick=()=>download(`// AdaptivePattern_MatchWaves_Breakwater.ino
+$('png').onclick=()=>{if(!best)return;let N=+$('size').value,tmp=document.createElement('canvas');tmp.width=N;tmp.height=N;let c=tmp.getContext('2d'),im=c.createImageData(N,N),b=encodeBytes(best.a);for(let i=0;i<b.length;i++){let o=i*4,v=b[i];im.data[o]=v;im.data[o+1]=v;im.data[o+2]=v;im.data[o+3]=255}c.putImageData(im,0,0);tmp.toBlob(x=>download(x,'pattern_2D_FFT_auto.png','image/png'))};
+$('raw').onclick=()=>best&&download(encodeBytes(best.a),'pattern_2D_FFT_auto.bin');
+$('tree').onclick=()=>download(JSON.stringify({version:3,auto:true,N:+$('size').value,params:{notch:+$('notch').value,width:+$('width').value,break:+$('break').value},nodes:treeNodes.map(x=>({...x,a:undefined}))},null,2),'autocorrelation_pattern_tree_auto.json','application/json');
+$('ino').onclick=()=>download(`// AdaptivePattern_MatchWaves_Breakwater_Auto.ino
 #include <Arduino.h>
 static const uint16_t PAT_LEN = 512;
 static const uint8_t N_WAVES = 12;
@@ -320,7 +354,7 @@ Params proposeCandidate(const Params& base, uint8_t mode){
 }
 void setup(){
   Serial.begin(115200); delay(300);
-  Serial.println(F("MatchWaves + Breakwater + min-jitter"));
+  Serial.println(F("MatchWaves + Breakwater + min-jitter (AUTO)"));
   cur.seed=micros()^0xA5A5u; rebuildPattern(cur,stepId); touchPattern();
   bestJ=measureJitterUs(280); best=cur;
   Serial.print(F("initial j=")); Serial.println(bestJ,4);
@@ -337,8 +371,9 @@ void loop(){
   if(stagnant>=8){ best.seed^=mix32(micros()^0x5A5Au); stagnant=0; Serial.println(F("reseed")); }
   delay(20);
 }
-`,'AdaptivePattern_MatchWaves_Breakwater_X.ino','text/plain');
+`,'AdaptivePattern_MatchWaves_Breakwater_Auto.ino','text/plain');
 ctx.fillStyle='#000';ctx.fillRect(0,0,cv.width,cv.height);
 })();
 </script>
-</body></html>
+</body>
+</html>
