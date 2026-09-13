@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Smart Pattern ∞ · GND-Pull Charge Compensator · R/W Optimizer</title>
+<title>Smart Pattern ∞ · SSD Zero-Charge Mass Balancer</title>
 <style>
 :root{--bg:#f7f9fc;--card:#ffffff;--line:#d8e0ea;--text:#1a2332;--muted:#5c6b7e;--a:#3b6ef5;--a-hover:#2a5ce0;--ok:#0d9f6e;--w:#c47d00;--bad:#d93838;--shadow:0 4px 20px rgba(26,35,50,.06)}
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(160deg,#eef3f9 0%,var(--bg) 45%,#f4f7fb 100%);color:var(--text);font:13px Inter,system-ui,-apple-system,sans-serif;min-height:100vh}
-.wrap{max-width:1240px;margin:auto;padding:18px 14px 50px}h1{font-size:1.25rem;font-weight:700;margin:0 0 6px;color:#0f172a;letter-spacing:-.02em}
-.sub{color:var(--muted);font-size:12px;line-height:1.55;max-width:860px}
+.wrap{max-width:1240px;margin:auto;padding:18px 14px 50px}h1{font-size:1.25rem;font-weight:700;margin:0 0 6px;color:#0f172a}
+.sub{color:var(--muted);font-size:12px;line-height:1.55;max-width:880px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0;box-shadow:var(--shadow)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
 .two{display:grid;grid-template-columns:1.35fr .65fr;gap:12px}@media(max-width:860px){.two{grid-template-columns:1fr}}
@@ -16,12 +16,12 @@ label{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-bot
 select,input{width:100%;background:#f8fafc;color:var(--text);border:1px solid #cdd6e4;border-radius:9px;padding:9px 10px;font-size:13px}
 select:focus,input:focus{outline:none;border-color:var(--a);box-shadow:0 0 0 3px rgba(59,110,245,.15)}
 input[type=range]{padding:0;accent-color:var(--a)}input:disabled,select:disabled{opacity:.65;cursor:not-allowed;background:#eef2f7}
-button{border:0;border-radius:10px;padding:10px 14px;background:var(--a);color:#fff;font-weight:600;font-size:13px;cursor:pointer;transition:background .15s}
+button{border:0;border-radius:10px;padding:10px 14px;background:var(--a);color:#fff;font-weight:600;font-size:13px;cursor:pointer}
 button:hover:not(:disabled){background:var(--a-hover)}button.s{background:#e8eef7;color:var(--text);border:1px solid #c5d0e0}
 button.s:hover:not(:disabled){background:#dce5f2}button:disabled{opacity:.45;cursor:not-allowed}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .bar{height:8px;border-radius:99px;background:#e4eaf2;overflow:hidden;margin-top:12px}
-.bar i{display:block;width:0;height:100%;background:linear-gradient(90deg,#3b6ef5,#0d9f6e);transition:width .25s ease}
+.bar i{display:block;width:0;height:100%;background:linear-gradient(90deg,#3b6ef5,#0d9f6e);transition:width .25s}
 .view{background:#0f1419;border:1px solid #c5d0e0;border-radius:12px;overflow:hidden;aspect-ratio:1/1}
 .view canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
 .stat{background:#f5f8fc;border:1px solid #dce3ed;border-radius:10px;padding:8px 10px;font-size:11px;color:var(--muted)}
@@ -32,25 +32,26 @@ button.s:hover:not(:disabled){background:#dce5f2}button:disabled{opacity:.45;cur
 .pill{font:11px ui-monospace,monospace;border:1px solid #cdd6e4;border-radius:99px;padding:4px 9px;color:#475569;background:#f1f5f9}
 details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summary{cursor:pointer;color:#475569;font-size:12px;font-weight:500}
 .hint{font-size:11px;color:var(--muted)}
-.auto-badge{display:inline-block;background:#e6f7ef;color:#0d9f6e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;margin-left:6px;vertical-align:middle}
+.auto-badge{display:inline-block;background:#e6f7ef;color:#0d9f6e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;margin-left:6px}
 .mode-card{background:#f0f5ff;border:1px solid #c7d7f5;border-radius:10px;padding:10px 12px;margin-top:10px}
 .mode-card label{margin-bottom:6px;color:#1e3a6e;font-weight:600}
-.gnd-card{background:#fff5f0;border:1px solid #f0c4b0;border-radius:10px;padding:10px 12px;margin-top:10px}
-.gnd-card label{margin-bottom:6px;color:#8b3a1a;font-weight:600}
+.ssd-card{background:#f0faf5;border:1px solid #a8d5c0;border-radius:10px;padding:10px 12px;margin-top:10px}
+.ssd-card label{margin-bottom:6px;color:#0d6b4a;font-weight:600}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Smart Pattern ∞ · GND-Pull Charge Compensator</h1>
+  <h1>Smart Pattern ∞ · SSD Zero-Charge Mass Balancer</h1>
   <div class="sub">
-    Генерация паттерна с <b>асимметричной компенсацией сильной подтяжки памяти к GND</b>.
-    Положительный заряд добавляется столько, сколько нужно, размер файла не ограничивается искусственно.
+    Автоматическая балансировка зарядовой массы памяти SSD до <b>net charge = 0</b>
+    (положительные и отрицательные заряды уравнены по интегралу). 
+    Автооценка зарядовой массы в реальном времени.
   </div>
 
   <div class="card">
     <div class="grid">
       <div>
-        <label>Размер (можно большой) <span class="auto-badge">FLEX</span></label>
+        <label>Размер <span class="auto-badge">FLEX</span></label>
         <select id="size">
           <option>256</option>
           <option selected>512</option>
@@ -70,35 +71,35 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     <div class="mode-card">
       <label>Режим R/W</label>
       <select id="rwMode">
-        <option value="balanced" selected>Balanced — равная макс. скорость чтения и записи</option>
-        <option value="write_fast">Write faster — запись быстрее чтения</option>
-        <option value="read_fast">Read faster — чтение быстрее записи</option>
+        <option value="balanced" selected>Balanced — равная скорость чтения/записи</option>
+        <option value="write_fast">Write faster</option>
+        <option value="read_fast">Read faster</option>
       </select>
     </div>
 
-    <!-- NEW: GND compensation -->
-    <div class="gnd-card">
-      <label>Компенсация подтяжки к GND (0 = нейтрально, 1 = сильная +компенсация)</label>
-      <input id="gndComp" type="range" min="0" max="1" step="0.05" value="0.65">
-      <div class="hint" style="margin-top:6px" id="gndHint">
-        Сильная компенсация: паттерн будет иметь избыточный положительный заряд, чтобы тянуть линии от GND.
+    <div class="ssd-card">
+      <label>
+        <input type="checkbox" id="ssdZero" checked style="width:auto;margin-right:8px;vertical-align:middle">
+        SSD Zero-Charge Mass (принудительно net charge ≈ 0)
+      </label>
+      <div class="hint" style="margin-top:6px">
+        Когда включено — после каждой генерации паттерн автоматически балансируется так,
+        чтобы сумма всех зарядов была равна нулю. Положительная и отрицательная масса уравниваются.
       </div>
     </div>
 
-    <details>
-      <summary>Параметры ядра (AUTO)</summary>
+    **Summary:**
+Параметры ядра (AUTO)
       <div class="grid" style="margin-top:10px">
-        <div><label>Notch</label><input id="notch" type="range" min="1.2" max="8" step=".05" value="2.5" disabled></div>
-        <div><label>Width</label><input id="width" type="range" min="1" max="12" step=".5" value="3" disabled></div>
-        <div><label>Breakwater</label><input id="break" type="range" min="0" max="1" step=".01" value=".70" disabled></div>
-        <div><label>FFT weight</label><input id="fw" type="range" min="0" max="1" step=".01" value=".38" disabled></div>
-        <div><label>Corr weight</label><input id="cw" type="range" min="0" max="1" step=".01" value=".32" disabled></div>
-        <div><label>Memory weight</label><input id="mw" type="range" min="0" max="1" step=".01" value=".82" disabled></div>
+        <div><label>Notch</label><input id="notch" type="range" min="1.2" max="8" step=".05" value="2.4" disabled></div>
+        <div><label>Width</label><input id="width" type="range" min="1" max="12" step=".5" value="2.9" disabled></div>
+        <div><label>Breakwater</label><input id="break" type="range" min="0" max="1" step=".01" value=".68" disabled></div>
+        <div><label>FFT weight</label><input id="fw" type="range" min="0" max="1" step=".01" value=".35" disabled></div>
+        <div><label>Memory weight</label><input id="mw" type="range" min="0" max="1" step=".01" value=".80" disabled></div>
       </div>
-    </details>
 
     <div class="row">
-      <button id="start">Запустить GND-Compensator</button>
+      <button id="start">Запустить SSD Zero-Charge Balancer</button>
       <button id="stop" class="s" disabled>Стоп</button>
       <button id="clear" class="s">Очистить</button>
     </div>
@@ -114,25 +115,25 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
 
   <div class="two">
     <div class="card">
-      <div class="hint" style="margin-bottom:8px">2D pattern (синий = +, красный = −). Избыток синего = компенсация GND</div>
+      <div class="hint" style="margin-bottom:8px">2D pattern · синий = + · красный = − · net charge → 0</div>
       <div class="view"><canvas id="cv" width="512" height="512"></canvas></div>
       <div class="pills">
         <span class="pill" id="backend">backend —</span>
         <span class="pill" id="modePill">mode —</span>
-        <span class="pill" id="gndPill">GND —</span>
+        <span class="pill" id="ssdPill">SSD Zero</span>
       </div>
     </div>
     <div class="card">
-      <div class="hint" style="margin-bottom:8px">Telemetry</div>
+      <div class="hint" style="margin-bottom:8px">Автооценка зарядовой массы</div>
       <div class="grid">
         <div class="stat">Status<b id="status">idle</b></div>
         <div class="stat">Generation<b id="gen">—</b></div>
         <div class="stat">Score<b id="score">—</b></div>
-        <div class="stat">Read Speed<b id="readSp">—</b></div>
-        <div class="stat">Write Speed<b id="writeSp">—</b></div>
-        <div class="stat">Mean Charge<b id="meanCh">—</b></div>
-        <div class="stat">+ / − ratio<b id="polRatio">—</b></div>
-        <div class="stat">Charge Score<b id="charge">—</b></div>
+        <div class="stat">Net Charge<b id="netCh">—</b></div>
+        <div class="stat">Charge Mass<b id="chMass">—</b></div>
+        <div class="stat">+Mass / −Mass<b id="pmass">—</b></div>
+        <div class="stat">Balance Quality<b id="balQ">—</b></div>
+        <div class="stat">Read / Write<b id="rwSp">—</b></div>
         <div class="stat">Best<b id="best">—</b></div>
         <div class="stat">Nodes / Size<b id="nodes">0</b></div>
       </div>
@@ -164,27 +165,17 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
 
   $('cap').textContent = `WASM: ${typeof WebAssembly==='object'?'yes':'n/a'} · threads: ${navigator.hardwareConcurrency||'?'} · RAM: ${navigator.deviceMemory||'?'} GB`;
 
-  $('gndComp').oninput = () => {
-    const v = +$('gndComp').value;
-    $('gndHint').textContent = v < 0.25
-      ? 'Слабая компенсация — почти нейтральный баланс.'
-      : v < 0.55
-        ? 'Средняя компенсация — умеренный избыток положительного заряда.'
-        : 'Сильная компенсация: паттерн будет иметь заметный избыток +, чтобы тянуть линии от GND.';
-  };
-
   function autoConfig(N) {
     const cores = navigator.hardwareConcurrency || 4;
     const ram = navigator.deviceMemory || 4;
     const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
     const budgetMs = mobile ? 5500 : Math.min(28000, 8000 + cores*800 + ram*350);
-    // для больших N уменьшаем число кандидатов и поколений, но не режем размер
-    const scale = Math.max(0.45, Math.min(1.2, 512 / N));
-    const cand = Math.min(9, Math.max(3, Math.round(Math.sqrt(cores)*1.7 * scale)));
+    const scale = Math.max(0.4, Math.min(1.15, 512 / N));
+    const cand = Math.min(8, Math.max(3, Math.round(Math.sqrt(cores)*1.6 * scale)));
     const eliteN = Math.max(2, Math.min(4, Math.floor(cand*.4)));
-    const steps = Math.min(45, Math.max(10, Math.round(budgetMs/750 * scale)));
+    const steps = Math.min(42, Math.max(10, Math.round(budgetMs/780 * scale)));
     return {N, steps, cand, eliteN, patience: Math.max(4, Math.round(steps*.22)), budgetMs,
-            notch:2.35, width:2.9, breakk:.67, fw:.36, cw:.30, mw:.84};
+            notch:2.3, width:2.8, breakk:.66, fw:.34, mw:.82};
   }
 
   function rnd32(x){x|=0;x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return(x^(x>>>16))>>>0}
@@ -233,7 +224,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     const work = new Float32Array(buf);
     const trials = 4;
     const readTimes = [], writeTimes = [];
-
     for (let t = 0; t < trials; t++) {
       let sum = 0;
       const t0 = performance.now();
@@ -248,94 +238,86 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       for (let i = 0; i < len; i++) work[i] = buf[i];
       writeTimes.push(performance.now() - t0);
     }
-
     const avg = a => a.reduce((x,y)=>x+y,0)/a.length;
     const std = a => { const m=avg(a); return Math.sqrt(a.reduce((s,v)=>s+(v-m)*(v-m),0)/a.length); };
-
     const readAvg = avg(readTimes), writeAvg = avg(writeTimes);
     const readJit = std(readTimes), writeJit = std(writeTimes);
-    const readSpeed  = 1 / (1 + readAvg * 0.16);
-    const writeSpeed = 1 / (1 + writeAvg * 0.16);
-    const readStab   = 1 / (1 + readJit * 8);
-    const writeStab  = 1 / (1 + writeJit * 8);
-
-    return { readAvg, writeAvg, readJit, writeJit, readSpeed, writeSpeed, readStab, writeStab,
-             ratio: writeAvg > 1e-6 ? readAvg / writeAvg : 1 };
+    return {
+      readSpeed: 1/(1+readAvg*0.16), writeSpeed: 1/(1+writeAvg*0.16),
+      readStab: 1/(1+readJit*8), writeStab: 1/(1+writeJit*8),
+      ratio: writeAvg > 1e-6 ? readAvg/writeAvg : 1
+    };
   }
 
-  // ========== GND-COMPENSATED CHARGE ==========
-  function chargeMetrics(a, gndComp) {
-    let sum = 0, sum2 = 0, pos = 0, neg = 0, strongPos = 0;
+  // ========== SSD ZERO-CHARGE MASS ==========
+  function assessChargeMass(a) {
+    let posMass = 0, negMass = 0, net = 0, absMass = 0;
     const n = a.length;
     for (let i = 0; i < n; i++) {
       const v = a[i];
-      sum += v; sum2 += v * v;
-      if (v > 0.04) pos++;
-      else if (v < -0.04) neg++;
-      if (v > 0.35) strongPos++;
+      net += v;
+      absMass += Math.abs(v);
+      if (v > 0) posMass += v;
+      else negMass += -v;
     }
-    const mean = sum / n;
-    const variance = sum2 / n - mean * mean;
-
-    // Целевой mean зависит от силы GND-компенсации
-    // gndComp=0 → target≈0, gndComp=1 → target≈+0.22
-    const targetMean = gndComp * 0.22;
-    const meanError = Math.abs(mean - targetMean);
-    const meanScore = 1 - Math.min(1, meanError * 5.5);
-
-    const polarity = 1 - Math.abs(pos - neg) / n;
-    // при сильной компенсации поощряем больше положительных ячеек
-    const posBias = Math.min(1, (pos / n) / (0.52 + gndComp * 0.18));
-    const energy = Math.min(1, Math.sqrt(Math.max(0, variance)) * 1.3);
-    const strongPosBonus = Math.min(1, strongPos / n * 4);
-
-    const chargeScore = 0.38 * meanScore + 0.22 * polarity + 0.18 * posBias
-                      + 0.12 * energy + 0.10 * strongPosBonus * gndComp;
-
-    return { mean, targetMean, meanScore, polarity, posBias, energy, strongPos,
-             pos, neg, chargeScore };
+    // Balance quality: 1.0 = идеально (posMass ≈ negMass и net ≈ 0)
+    const massDiff = Math.abs(posMass - negMass);
+    const balanceQ = 1 - Math.min(1, (Math.abs(net) * 4 + massDiff * 2) / (absMass + 1e-6));
+    return {
+      net, posMass, negMass, absMass,
+      balanceQ: Math.max(0, balanceQ),
+      mean: net / n
+    };
   }
 
-  function enforceGndCompensation(a, N, gndComp) {
-    // 1. Убираем текущий mean
-    let mean = 0;
-    for (let i = 0; i < a.length; i++) mean += a[i];
-    mean /= a.length;
-    for (let i = 0; i < a.length; i++) a[i] -= mean;
+  // Принудительная балансировка до net charge = 0
+  // и выравнивание положительной/отрицательной массы
+  function enforceZeroChargeMass(a, N) {
+    const n = a.length;
 
-    // 2. Локальное сглаживание
+    // 1. Убираем mean → net = 0
+    let mean = 0;
+    for (let i = 0; i < n; i++) mean += a[i];
+    mean /= n;
+    for (let i = 0; i < n; i++) a[i] -= mean;
+
+    // 2. Считаем текущие массы
+    let posMass = 0, negMass = 0;
+    for (let i = 0; i < n; i++) {
+      if (a[i] > 0) posMass += a[i];
+      else negMass += -a[i];
+    }
+
+    // 3. Если массы не равны — масштабируем меньшую сторону вверх
+    //    (или большую вниз), чтобы posMass == negMass
+    if (posMass > 1e-8 && negMass > 1e-8) {
+      const target = (posMass + negMass) * 0.5;
+      const posScale = target / posMass;
+      const negScale = target / negMass;
+      for (let i = 0; i < n; i++) {
+        if (a[i] > 0) a[i] *= posScale;
+        else a[i] *= negScale;
+      }
+    }
+
+    // 4. Лёгкое локальное сглаживание, чтобы не было артефактов
     const tmp = new Float32Array(a);
     for (let y = 1; y < N - 1; y++) {
       for (let x = 1; x < N - 1; x++) {
         const i = y * N + x;
         const local = (tmp[i-N-1]+tmp[i-N]+tmp[i-N+1] + tmp[i-1]+tmp[i]+tmp[i+1] + tmp[i+N-1]+tmp[i+N]+tmp[i+N+1]) / 9;
-        a[i] = tmp[i] - local * 0.25;
+        a[i] = tmp[i] * 0.78 + local * 0.22;
       }
     }
 
-    // 3. Добавляем глобальный положительный offset пропорционально gndComp
-    //    + дополнительные «островки» положительного заряда
-    const globalBoost = gndComp * 0.19;
-    for (let i = 0; i < a.length; i++) a[i] += globalBoost;
+    // 5. Финальный mean-removal (на случай накопления ошибки)
+    mean = 0;
+    for (let i = 0; i < n; i++) mean += a[i];
+    mean /= n;
+    for (let i = 0; i < n; i++) a[i] -= mean;
 
-    // 4. Дополнительные положительные «якоря» (чтобы точно компенсировать GND)
-    if (gndComp > 0.3) {
-      const anchors = Math.floor(8 + gndComp * 24);
-      const step = Math.max(3, Math.floor(N / Math.sqrt(anchors)));
-      for (let y = step; y < N; y += step) {
-        for (let x = step; x < N; x += step) {
-          const i = y * N + x;
-          const boost = 0.18 + gndComp * 0.28;
-          a[i] = Math.min(0.95, a[i] + boost);
-          // небольшая окрестность
-          if (x+1 < N) a[i+1] = Math.min(0.9, a[i+1] + boost*0.45);
-          if (y+1 < N) a[i+N] = Math.min(0.9, a[i+N] + boost*0.45);
-        }
-      }
-    }
-
-    // 5. Мягкий clip
-    for (let i = 0; i < a.length; i++) a[i] = Math.tanh(a[i] * 1.08);
+    // 6. Мягкий clip
+    for (let i = 0; i < n; i++) a[i] = Math.tanh(a[i] * 1.05);
   }
 
   function makeBase(N, seed, gen) {
@@ -393,10 +375,9 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     return o;
   }
 
-  function metricsFromFloat(a, N, fw, cw, mw, mode, gndComp) {
-    const bytes = encodeBytes(a);
+  function metricsFromFloat(a, N, fw, mw, mode, ssdZero) {
     const rw = measureMemoryRW(a, N);
-    const ch = chargeMetrics(a, gndComp);
+    const ch = assessChargeMass(a);
 
     const f = fft2D(a, N);
     let peak = 0, sum = 0;
@@ -416,19 +397,21 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       memScore = 0.31*rw.readSpeed + 0.31*rw.writeSpeed + 0.14*rw.readStab + 0.14*rw.writeStab + 0.10*bal;
     }
 
+    // При SSD Zero — очень высокий вес balanceQ
+    const chargeWeight = ssdZero ? 0.38 : 0.18;
     const score =
-        mw * 0.46 * memScore +
-        0.26 * ch.chargeScore +          // выше вес заряда из-за GND-компенсации
-        (0.09 + fw*0.06) * (1/(1+peak/12)) +
-        (0.07 + cw*0.04) * (ch.energy) +
-        0.06 * ((rw.readStab + rw.writeStab)/2);
+        mw * 0.42 * memScore +
+        chargeWeight * ch.balanceQ +
+        (0.10 + fw*0.06) * (1/(1+peak/12)) +
+        0.08 * ((rw.readStab + rw.writeStab)/2) +
+        (ssdZero ? 0.12 * (1 - Math.min(1, Math.abs(ch.net)*80)) : 0.05);
 
     return {
       score, memScore,
       readSpeed: rw.readSpeed, writeSpeed: rw.writeSpeed,
-      meanCharge: ch.mean, targetMean: ch.targetMean,
-      polRatio: ch.neg > 0 ? (ch.pos / ch.neg) : 99,
-      charge: ch.chargeScore, peak
+      net: ch.net, absMass: ch.absMass,
+      posMass: ch.posMass, negMass: ch.negMass,
+      balanceQ: ch.balanceQ, mean: ch.mean, peak
     };
   }
 
@@ -447,14 +430,8 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     $('png').disabled = $('raw').disabled = $('tree').disabled = true;
 
     const mode = $('rwMode').value;
-    const gndComp = +$('gndComp').value;
+    const ssdZero = $('ssdZero').checked;
     let N = +$('size').value;
-
-    // если пользователь выбрал очень большой размер и мало RAM — предупреждаем, но не режем
-    const ram = navigator.deviceMemory || 4;
-    if (N >= 1536 && ram < 8) {
-      log(`Большой размер ${N} при ~${ram} GB RAM — может быть медленно, но размер не ограничиваем`, 'warn');
-    }
 
     const cfg = autoConfig(N);
     $('steps').value = cfg.steps;
@@ -465,24 +442,22 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     $('width').value = cfg.width.toFixed(1);
     $('break').value = cfg.breakk.toFixed(2);
     $('fw').value = cfg.fw.toFixed(2);
-    $('cw').value = cfg.cw.toFixed(2);
     $('mw').value = cfg.mw.toFixed(2);
 
     const steps = cfg.steps, cand = cfg.cand, eliteN = cfg.eliteN, pat = cfg.patience;
     const seed = (+$('seed').value >>> 0);
     treeNodes = []; best = null;
 
-    // подстраиваем canvas под размер
     cv.width = Math.min(512, N);
     cv.height = Math.min(512, N);
 
     ui('status', 'running');
     ui('backend', 'CPU');
     ui('modePill', mode === 'balanced' ? 'Balanced' : mode === 'write_fast' ? 'Write>' : 'Read>');
-    ui('gndPill', `GND×${gndComp.toFixed(2)}`);
+    ui('ssdPill', ssdZero ? 'SSD Zero ON' : 'SSD Zero OFF');
 
-    log(`GND compensation = ${gndComp.toFixed(2)} (target mean ≈ +${(gndComp*0.22).toFixed(3)})`, 'ok');
-    log(`Size=${N} (${(N*N/1e6).toFixed(2)} M cells) · gens=${steps} · cand=${cand}`, 'ok');
+    log(`SSD Zero-Charge Mass: ${ssdZero ? 'ENABLED' : 'disabled'}`, ssdZero ? 'ok' : 'warn');
+    log(`Size=\( {N} ( \){(N*N/1e6).toFixed(2)} M cells) · gens=${steps}`, 'ok');
 
     let elite = [], no = 0, start = performance.now();
     let notch = cfg.notch, width = cfg.width, breakk = cfg.breakk;
@@ -490,7 +465,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
 
     for (let gen = 1; gen <= steps && active; gen++) {
       if (performance.now() - start > cfg.budgetMs) break;
-      ui('gen', `${gen}/${steps}`);
+      ui('gen', `\( {gen}/ \){steps}`);
       $('prog').style.width = ((gen-1)/steps*100) + '%';
 
       if (gen % 4 === 0) {
@@ -526,12 +501,14 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
           for (let y = 0; y < N; y++) a[y*N+x] = Math.tanh(r[y]);
         }
 
-        // ключевой шаг — компенсация GND
-        enforceGndCompensation(a, N, gndComp);
+        // === КЛЮЧЕВОЙ ШАГ: SSD Zero-Charge Mass ===
+        if (ssdZero) {
+          enforceZeroChargeMass(a, N);
+        }
 
-        const met = metricsFromFloat(a, N, cfg.fw, cfg.cw, cfg.mw, mode, gndComp);
+        const met = metricsFromFloat(a, N, cfg.fw, cfg.mw, mode, ssdZero);
         const node = { id: treeNodes.length, parent: elite.length ? elite[c%elite.length].id : null,
-                       gen, score: met.score, metrics: met, seed: s, a, mode, gndComp };
+                       gen, score: met.score, metrics: met, seed: s, a, mode, ssdZero };
         results.push(node);
         treeNodes.push({...node, a: null});
 
@@ -539,11 +516,11 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
 
         ui('nodes', `${treeNodes.length} / ${N}²`);
         ui('score', met.score.toFixed(5));
-        ui('readSp', met.readSpeed.toFixed(4));
-        ui('writeSp', met.writeSpeed.toFixed(4));
-        ui('meanCh', met.meanCharge.toFixed(4));
-        ui('polRatio', met.polRatio.toFixed(2));
-        ui('charge', met.charge.toFixed(4));
+        ui('netCh', met.net.toExponential(2));
+        ui('chMass', met.absMass.toFixed(1));
+        ui('pmass', `${met.posMass.toFixed(1)} / ${met.negMass.toFixed(1)}`);
+        ui('balQ', met.balanceQ.toFixed(4));
+        ui('rwSp', `${met.readSpeed.toFixed(3)} / ${met.writeSpeed.toFixed(3)}`);
 
         render(a, N);
         await adaptiveYield(st);
@@ -557,10 +534,10 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       if (elite[0] === best) {
         no = 0;
         ui('best', best.score.toFixed(5));
-        log(`GEN ${gen}: BEST ${best.score.toFixed(5)}  mean=${best.metrics.meanCharge.toFixed(4)} (target≈${best.metrics.targetMean.toFixed(3)})  +/−=${best.metrics.polRatio.toFixed(2)}`, 'ok');
+        log(`GEN ${gen}: BEST \( {best.score.toFixed(5)}  net= \){best.metrics.net.toExponential(2)}  balQ=\( {best.metrics.balanceQ.toFixed(4)}  +/−= \){best.metrics.posMass.toFixed(0)}/${best.metrics.negMass.toFixed(0)}`, 'ok');
       } else {
         no++;
-        log(`GEN ${gen}: no improvement ${no}/${pat}`, 'warn');
+        log(`GEN ${gen}: no improvement \( {no}/ \){pat}`, 'warn');
       }
       if (no >= pat && gen >= 5) { log(`Early stop`, 'warn'); break; }
     }
@@ -569,7 +546,8 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       render(best.a, N);
       $('png').disabled = $('raw').disabled = $('tree').disabled = false;
       ui('status', 'ready');
-      log(`Готово ${((performance.now()-start)/1000).toFixed(1)}s · size=${N} · meanCharge=${best.metrics.meanCharge.toFixed(4)} · GND=${gndComp}`, 'ok');
+      const ch = assessChargeMass(best.a);
+      log(`Готово \( {((performance.now()-start)/1000).toFixed(1)}s · net= \){ch.net.toExponential(3)} · balanceQ=\( {ch.balanceQ.toFixed(5)} · mass= \){ch.absMass.toFixed(1)}`, 'ok');
     } else ui('status', 'stopped');
 
     active = false;
@@ -583,10 +561,9 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
 
   function buildArduinoSketch() {
     const mode = $('rwMode').value;
-    const gnd = +$('gndComp').value;
-    return `// AdaptivePattern GND-Compensated R/W
-// gndComp=${gnd.toFixed(2)} · mode=${mode}
-// Паттерн намеренно имеет положительный mean для компенсации подтяжки к GND
+    const ssdZero = $('ssdZero').checked;
+    return `// AdaptivePattern SSD Zero-Charge Mass
+// Принудительная балансировка net charge = 0
 #include <Arduino.h>
 #include <EEPROM.h>
 #if defined(__AVR__)
@@ -611,7 +588,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
   #define SAMPLES 80
 #endif
 
-#define GND_COMP ${gnd.toFixed(3)}f
+#define SSD_ZERO_CHARGE ${ssdZero ? 1 : 0}
 
 struct Params {
   uint16_t smooth, adapt, wave, breakw, noise;
@@ -668,25 +645,33 @@ static void makePattern(const Params& p) {
     pattern[i] = (int8_t)constrain((int)(v*118.0f), -128, 127);
   }
 
-  // === GND compensation ===
+#if SSD_ZERO_CHARGE
+  // === SSD Zero Charge Mass ===
   int32_t sum = 0;
   for (uint16_t i = 0; i < PAT_LEN; i++) sum += pattern[i];
   int8_t mean = (int8_t)(sum / (int32_t)PAT_LEN);
-  // убираем mean и добавляем положительный offset
-  int8_t boost = (int8_t)(GND_COMP * 28.0f);   // до ~+28 при полной компенсации
+  for (uint16_t i = 0; i < PAT_LEN; i++) pattern[i] = (int8_t)constrain(pattern[i] - mean, -128, 127);
+
+  // Выравнивание положительной и отрицательной массы
+  int32_t posM = 0, negM = 0;
   for (uint16_t i = 0; i < PAT_LEN; i++) {
-    int16_t v = pattern[i] - mean + boost;
-    pattern[i] = (int8_t)constrain(v, -128, 127);
+    if (pattern[i] > 0) posM += pattern[i];
+    else negM += -pattern[i];
   }
-  // дополнительные положительные якоря
-  if (GND_COMP > 0.35f) {
-    uint16_t step = PAT_LEN / (6 + (uint16_t)(GND_COMP * 10));
-    if (step < 4) step = 4;
-    for (uint16_t i = step; i < PAT_LEN; i += step) {
-      int16_t v = pattern[i] + (int16_t)(18 + GND_COMP * 22);
-      pattern[i] = (int8_t)constrain(v, -128, 127);
+  if (posM > 0 && negM > 0) {
+    // простое приближение: если одна сторона сильно больше — слегка уменьшаем
+    if (posM > negM * 1.08f) {
+      for (uint16_t i = 0; i < PAT_LEN; i++) if (pattern[i] > 0) pattern[i] = (int8_t)(pattern[i] * 0.94f);
+    } else if (negM > posM * 1.08f) {
+      for (uint16_t i = 0; i < PAT_LEN; i++) if (pattern[i] < 0) pattern[i] = (int8_t)(pattern[i] * 0.94f);
     }
   }
+  // финальный mean removal
+  sum = 0;
+  for (uint16_t i = 0; i < PAT_LEN; i++) sum += pattern[i];
+  mean = (int8_t)(sum / (int32_t)PAT_LEN);
+  for (uint16_t i = 0; i < PAT_LEN; i++) pattern[i] = (int8_t)constrain(pattern[i] - mean, -128, 127);
+#endif
 }
 
 static float measureRW() {
@@ -714,16 +699,19 @@ static float measureRW() {
 
   int32_t sum = 0;
   for (uint16_t i = 0; i < PAT_LEN; i++) sum += pattern[i];
-  float mean = (float)sum / PAT_LEN;
-  // штраф если mean слишком низкий (не компенсирует GND)
-  float meanPen = (mean < GND_COMP * 12.0f) ? (GND_COMP * 12.0f - mean) * 1.4f : 0;
+  float net = (float)sum;
+  // сильный штраф за ненулевой net charge при SSD_ZERO
+  float netPen = 0;
+#if SSD_ZERO_CHARGE
+  netPen = fabsf(net) * 0.08f;
+#endif
 
   #if defined(MODE_WRITE_FAST)
-    return wMed * 0.68f + rMed * 0.18f + meanPen;
+    return wMed * 0.68f + rMed * 0.18f + netPen;
   #elif defined(MODE_READ_FAST)
-    return rMed * 0.68f + wMed * 0.18f + meanPen;
+    return rMed * 0.68f + wMed * 0.18f + netPen;
   #else
-    return (rMed + wMed) * 0.40f + fabsf(rMed - wMed) * 0.22f + meanPen;
+    return (rMed + wMed) * 0.40f + fabsf(rMed - wMed) * 0.22f + netPen;
   #endif
 }
 
@@ -768,8 +756,8 @@ void setup() {
 #if defined(__AVR__)
   wdt_enable(WDTO_4S);
 #endif
-  Serial.println(F("GND-Compensated Pattern READY"));
-  Serial.print(F("gnd=")); Serial.print(GND_COMP, 2);
+  Serial.println(F("SSD Zero-Charge Pattern READY"));
+  Serial.print(F("SSD_ZERO=")); Serial.print(SSD_ZERO_CHARGE);
   Serial.print(F(" best=")); Serial.println(bestFit, 3);
 }
 
@@ -822,23 +810,24 @@ void loop() {
     const b = encodeBytes(best.a);
     for (let i=0;i<b.length;i++){ const o=i*4,v=b[i]; im.data[o]=v;im.data[o+1]=v;im.data[o+2]=v;im.data[o+3]=255; }
     c.putImageData(im,0,0);
-    tmp.toBlob(x => download(x, `gnd_comp_${$('gndComp').value}_pattern.png`, 'image/png'));
+    tmp.toBlob(x => download(x, `ssd_zero_charge_${N}.png`, 'image/png'));
   };
 
-  $('raw').onclick = () => best && download(encodeBytes(best.a), `gnd_comp_${$('gndComp').value}.bin`);
+  \( ('raw').onclick = () => best && download(encodeBytes(best.a), `ssd_zero_charge_ \){+$('size').value}.bin`);
   $('tree').onclick = () => download(JSON.stringify({
-    version: 6, mode: $('rwMode').value, gndComp: +$('gndComp').value,
+    version: 7, mode: $('rwMode').value, ssdZero: $('ssdZero').checked,
     N: +$('size').value, bestScore: best?.score,
-    meanCharge: best?.metrics?.meanCharge, targetMean: best?.metrics?.targetMean,
+    netCharge: best?.metrics?.net, balanceQ: best?.metrics?.balanceQ,
+    posMass: best?.metrics?.posMass, negMass: best?.metrics?.negMass,
     nodes: treeNodes.map(x => ({...x, a: undefined}))
-  }, null, 2), `tree_gnd_${$('gndComp').value}.json`, 'application/json');
+  }, null, 2), `tree_ssd_zero.json`, 'application/json');
 
   $('ino').onclick = () => {
     let code = buildArduinoSketch();
     const mode = $('rwMode').value;
     if (mode === 'write_fast') code = '#define MODE_WRITE_FAST\n' + code;
     else if (mode === 'read_fast') code = '#define MODE_READ_FAST\n' + code;
-    download(code, `AdaptivePattern_GND_${$('gndComp').value}_${mode}.ino`, 'text/plain');
+    download(code, `AdaptivePattern_SSD_ZeroCharge.ino`, 'text/plain');
   };
 
   ctx.fillStyle = '#0f1419';
