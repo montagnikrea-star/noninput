@@ -5,700 +5,1039 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Smart Pattern ∞ · Auto · 2D FFT · Spectral Tree · GPU</title>
 <style>
-:root{--bg:#070a0f;--card:#101621;--card2:#0b1018;--line:#263142;--text:#edf3f9;--muted:#8d99aa;--a:#7aa2ff;--ok:#3dd68c;--w:#f5a524;--bad:#ff6b6b}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(1000px 500px at 12% -10%,#1a2745,var(--bg) 58%);color:var(--text);font:13px Inter,system-ui,sans-serif}
-.wrap{max-width:1240px;margin:auto;padding:15px 12px 40px}h1{font-size:1.15rem;margin:0 0 5px}.sub{color:var(--muted);font-size:11px;line-height:1.5}
-.card{background:linear-gradient(180deg,var(--card),#0e141d);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0;box-shadow:0 8px 30px #0004}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.two{display:grid;grid-template-columns:1.35fr .65fr;gap:10px}@media(max-width:800px){.two{grid-template-columns:1fr}}
-label{display:block;color:var(--muted);font-size:10px;margin-bottom:4px}select,input{width:100%;background:#0a0f17;color:var(--text);border:1px solid #2a3444;border-radius:8px;padding:8px}
-input[type=range]{padding:0;accent-color:var(--a)}button{border:0;border-radius:9px;padding:9px 12px;background:var(--a);color:#07101d;font-weight:700;cursor:pointer}button.s{background:#283243;color:var(--text)}button:disabled{opacity:.4;cursor:not-allowed}
-.row{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.bar{height:7px;border-radius:99px;background:#080c12;overflow:hidden;margin-top:9px}.bar i{display:block;width:0;height:100%;background:linear-gradient(90deg,#7aa2ff,#3dd68c)}
-.view{background:#000;border:1px solid #293343;border-radius:10px;overflow:hidden;aspect-ratio:1/1}.view canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
-.stat{background:#0a0f17;border:1px solid #222c3a;border-radius:9px;padding:7px;font-size:10px;color:var(--muted)}.stat b{display:block;color:var(--text);font-size:12px;margin-top:3px}
-.log{background:#080c12;border:1px solid #222c3a;border-radius:9px;min-height:80px;max-height:190px;overflow:auto;padding:8px;font:10px/1.45 ui-monospace,Consolas,monospace}.ok{color:var(--ok)}.warn{color:var(--w)}.bad{color:var(--bad)}
-.pills{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.pill{font:10px ui-monospace,monospace;border:1px solid #293344;border-radius:99px;padding:4px 7px;color:#b8c4d2;background:#090e16}
-details{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}summary{cursor:pointer;color:#b8c4d2;font-size:11px}.hint{font-size:10px;color:var(--muted)}
-.auto-badge{display:inline-block;background:#1a3a2a;color:#3dd68c;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle}
+:root {
+  --bg: #f7f9fc;
+  --card: #ffffff;
+  --card2: #f0f4f8;
+  --line: #d8e0ea;
+  --text: #1a2332;
+  --muted: #5c6b7e;
+  --a: #3b6ef5;
+  --a-hover: #2a5ce0;
+  --ok: #0d9f6e;
+  --w: #c47d00;
+  --bad: #d93838;
+  --shadow: 0 4px 20px rgba(26, 35, 50, 0.06);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: linear-gradient(160deg, #eef3f9 0%, var(--bg) 45%, #f4f7fb 100%);
+  color: var(--text);
+  font: 13px Inter, system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+.wrap {
+  max-width: 1240px;
+  margin: auto;
+  padding: 18px 14px 50px;
+}
+
+h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  max-width: 720px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  margin: 12px 0;
+  box-shadow: var(--shadow);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.two {
+  display: grid;
+  grid-template-columns: 1.35fr 0.65fr;
+  gap: 12px;
+}
+@media (max-width: 860px) {
+  .two { grid-template-columns: 1fr; }
+}
+
+label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+select, input {
+  width: 100%;
+  background: #f8fafc;
+  color: var(--text);
+  border: 1px solid #cdd6e4;
+  border-radius: 9px;
+  padding: 9px 10px;
+  font-size: 13px;
+  transition: border-color .15s;
+}
+select:focus, input:focus {
+  outline: none;
+  border-color: var(--a);
+  box-shadow: 0 0 0 3px rgba(59, 110, 245, 0.15);
+}
+input[type=range] {
+  padding: 0;
+  accent-color: var(--a);
+  height: 6px;
+}
+input:disabled, select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: #eef2f7;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--a);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+button:hover:not(:disabled) { background: var(--a-hover); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button.s {
+  background: #e8eef7;
+  color: var(--text);
+  border: 1px solid #c5d0e0;
+}
+button.s:hover:not(:disabled) {
+  background: #dce5f2;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.bar {
+  height: 8px;
+  border-radius: 99px;
+  background: #e4eaf2;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.bar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #3b6ef5, #0d9f6e);
+  transition: width .25s ease;
+}
+
+.view {
+  background: #0f1419;
+  border: 1px solid #c5d0e0;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 1/1;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+}
+.view canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.stat {
+  background: #f5f8fc;
+  border: 1px solid #dce3ed;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.stat b {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+.log {
+  background: #f8fafc;
+  border: 1px solid #dce3ed;
+  border-radius: 10px;
+  min-height: 90px;
+  max-height: 200px;
+  overflow: auto;
+  padding: 10px 12px;
+  font: 11px/1.5 ui-monospace, "SF Mono", Consolas, monospace;
+  color: #334155;
+}
+.ok { color: var(--ok); }
+.warn { color: var(--w); }
+.bad { color: var(--bad); }
+
+.pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.pill {
+  font: 11px ui-monospace, monospace;
+  border: 1px solid #cdd6e4;
+  border-radius: 99px;
+  padding: 4px 9px;
+  color: #475569;
+  background: #f1f5f9;
+}
+
+details {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+summary {
+  cursor: pointer;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  user-select: none;
+}
+summary:hover { color: var(--a); }
+
+.hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.auto-badge {
+  display: inline-block;
+  background: #e6f7ef;
+  color: #0d9f6e;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.02em;
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Smart Pattern ∞ · Auto Optimizer · 2D FFT · Spectral Tree</h1>
-<div class="sub">Все параметры подбираются автоматически для лучшего результата: размер, поколения, кандидаты, elite, patience, notch, width, breakwater, веса FFT/corr. Эволюционный поиск + адаптивная спектральная очистка.</div>
-<div class="card">
-<div class="grid">
-<div><label>Размер <span class="auto-badge">AUTO</span></label><select id="size" disabled><option>256</option><option selected>512</option><option>1024</option><option>2048</option></select></div>
-<div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" type="number" value="—" disabled></div>
-<div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" type="number" value="—" disabled></div>
-<div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" type="number" value="—" disabled></div>
-<div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" type="number" value="—" disabled></div>
-<div><label>Seed</label><input id="seed" type="number" value="123456789"></div>
+  <h1>Smart Pattern ∞ · Auto Optimizer · 2D FFT · Spectral Tree</h1>
+  <div class="sub">Все параметры подбираются автоматически для лучшего результата: размер, поколения, кандидаты, elite, patience, notch, width, breakwater, веса FFT/corr. Эволюционный поиск + адаптивная спектральная очистка.</div>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label>Размер <span class="auto-badge">AUTO</span></label>
+        <select id="size" disabled>
+          <option>256</option>
+          <option selected>512</option>
+          <option>1024</option>
+          <option>2048</option>
+        </select>
+      </div>
+      <div>
+        <label>Поколения <span class="auto-badge">AUTO</span></label>
+        <input id="steps" type="number" value="—" disabled>
+      </div>
+      <div>
+        <label>Кандидатов <span class="auto-badge">AUTO</span></label>
+        <input id="cand" type="number" value="—" disabled>
+      </div>
+      <div>
+        <label>Elite <span class="auto-badge">AUTO</span></label>
+        <input id="elite" type="number" value="—" disabled>
+      </div>
+      <div>
+        <label>Patience <span class="auto-badge">AUTO</span></label>
+        <input id="patience" type="number" value="—" disabled>
+      </div>
+      <div>
+        <label>Seed</label>
+        <input id="seed" type="number" value="123456789">
+      </div>
+    </div>
+
+    <details>
+      <summary>Параметры ядра (все AUTO — значения только для отображения)</summary>
+      <div class="grid" style="margin-top:10px">
+        <div>
+          <label>Notch threshold</label>
+          <input id="notch" type="range" min="1.2" max="8" step=".05" value="2.6" disabled>
+        </div>
+        <div>
+          <label>Notch width</label>
+          <input id="width" type="range" min="1" max="12" step=".5" value="3" disabled>
+        </div>
+        <div>
+          <label>Breakwater</label>
+          <input id="break" type="range" min="0" max="1" step=".01" value=".72" disabled>
+        </div>
+        <div>
+          <label>Tree depth</label>
+          <input id="depth" type="number" min="1" max="10" value="4" disabled>
+        </div>
+        <div>
+          <label>FFT weight</label>
+          <input id="fw" type="range" min="0" max="1" step=".01" value=".55" disabled>
+        </div>
+        <div>
+          <label>Corr weight</label>
+          <input id="cw" type="range" min="0" max="1" step=".01" value=".50" disabled>
+        </div>
+      </div>
+    </details>
+
+    <div class="row">
+      <button id="start">Запустить ∞ Auto Optimizer</button>
+      <button id="stop" class="s" disabled>Стоп</button>
+      <button id="clear" class="s">Очистить дерево</button>
+    </div>
+    <div class="row">
+      <button id="png" class="s" disabled>PNG</button>
+      <button id="raw" class="s" disabled>RAW .bin</button>
+      <button id="tree" class="s" disabled>Tree JSON</button>
+      <button id="ino" class="s">Arduino .ino</button>
+    </div>
+    <div class="bar"><i id="prog"></i></div>
+    <div id="cap" class="hint" style="margin-top:8px"></div>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <div class="hint" style="margin-bottom:8px">2D pattern / spectral result</div>
+      <div class="view">
+        <canvas id="cv" width="512" height="512"></canvas>
+      </div>
+      <div class="pills">
+        <span class="pill" id="backend">backend —</span>
+        <span class="pill" id="simd">SIMD —</span>
+        <span class="pill" id="gpu">GPU —</span>
+        <span class="pill" id="fft">FFT —</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hint" style="margin-bottom:8px">Telemetry</div>
+      <div class="grid">
+        <div class="stat">Status<b id="status">idle</b></div>
+        <div class="stat">Generation<b id="gen">—</b></div>
+        <div class="stat">Score<b id="score">—</b></div>
+        <div class="stat">Entropy<b id="entropy">—</b></div>
+        <div class="stat">Peak ratio<b id="peak">—</b></div>
+        <div class="stat">Corr<b id="corr">—</b></div>
+        <div class="stat">Smooth<b id="smooth">—</b></div>
+        <div class="stat">Tree nodes<b id="nodes">0</b></div>
+        <div class="stat">Best<b id="best">—</b></div>
+        <div class="stat">Memory<b id="memory">—</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="hint" style="margin-bottom:8px">Лог</div>
+    <div id="log" class="log"></div>
+  </div>
 </div>
-<details>
-<summary>Параметры ядра (все AUTO — значения только для отображения)</summary>
-<div class="grid" style="margin-top:8px">
-<div><label>Notch threshold</label><input id="notch" type="range" min="1.2" max="8" step=".05" value="2.6" disabled></div>
-<div><label>Notch width</label><input id="width" type="range" min="1" max="12" step=".5" value="3" disabled></div>
-<div><label>Breakwater</label><input id="break" type="range" min="0" max="1" step=".01" value=".72" disabled></div>
-<div><label>Tree depth</label><input id="depth" type="number" min="1" max="10" value="4" disabled></div>
-<div><label>FFT weight</label><input id="fw" type="range" min="0" max="1" step=".01" value=".55" disabled></div>
-<div><label>Corr weight</label><input id="cw" type="range" min="0" max="1" step=".01" value=".50" disabled></div>
-</div>
-</details>
-<div class="row"><button id="start">Запустить ∞ Auto Optimizer</button><button id="stop" class="s" disabled>Стоп</button><button id="clear" class="s">Очистить дерево</button></div>
-<div class="row"><button id="png" class="s" disabled>PNG</button><button id="raw" class="s" disabled>RAW .bin</button><button id="tree" class="s" disabled>Tree JSON</button><button id="ino" class="s">Arduino .ino</button></div>
-<div class="bar"><i id="prog"></i></div>
-<div id="cap" class="hint" style="margin-top:7px"></div>
-</div>
-<div class="two">
-<div class="card"><div class="hint" style="margin-bottom:7px">2D pattern / spectral result</div><div class="view"><canvas id="cv" width="512" height="512"></canvas></div>
-<div class="pills"><span class="pill" id="backend">backend —</span><span class="pill" id="simd">SIMD —</span><span class="pill" id="gpu">GPU —</span><span class="pill" id="fft">FFT —</span></div></div>
-<div class="card"><div class="hint">Telemetry</div><div class="grid">
-<div class="stat">Status<b id="status">idle</b></div><div class="stat">Generation<b id="gen">—</b></div>
-<div class="stat">Score<b id="score">—</b></div><div class="stat">Entropy<b id="entropy">—</b></div>
-<div class="stat">Peak ratio<b id="peak">—</b></div><div class="stat">Corr<b id="corr">—</b></div>
-<div class="stat">Smooth<b id="smooth">—</b></div><div class="stat">Tree nodes<b id="nodes">0</b></div>
-<div class="stat">Best<b id="best">—</b></div><div class="stat">Memory<b id="memory">—</b></div>
-</div></div>
-</div>
-<div class="card"><div class="hint">Лог</div><div id="log" class="log"></div></div>
-</div>
+
 <script>
-(()=>{'use strict';
-const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d',{alpha:false}),logEl=$('log');
-let active=false,best=null,treeNodes=[],gpu=null,gpuReady=false;
-const log=(s,c='')=>{let d=document.createElement('div');d.className=c;d.textContent='['+new Date().toLocaleTimeString()+'] '+s;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight};
-const ui=(id,v)=>$(id).textContent=v;
-$('cap').textContent=`WebAssembly SIMD: ${typeof WebAssembly==='object'?'available':'n/a'} · threads: ${navigator.hardwareConcurrency||'?'} · RAM hint: ${navigator.deviceMemory||'?'} GB`;
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const cv = $('cv');
+  const ctx = cv.getContext('2d', { alpha: false });
+  const logEl = $('log');
 
-/* ========== AUTO CONFIG ========== */
-function autoConfig(){
-  const threads = navigator.hardwareConcurrency || 4;
-  const ram = navigator.deviceMemory || 4;
-  // Size: prefer 512, upscale only if enough RAM
-  let N = 512;
-  if(ram >= 8 && threads >= 8) N = 1024;
-  else if(ram < 2) N = 256;
-  // Generations: more on stronger machines
-  const steps = Math.min(48, Math.max(18, Math.floor(12 + threads * 2.5 + ram)));
-  // Candidates & elite scale with cores
-  const cand = Math.min(10, Math.max(4, Math.floor(3 + threads * 0.6)));
-  const eliteN = Math.min(6, Math.max(3, Math.floor(cand * 0.7)));
-  const patience = Math.min(10, Math.max(4, Math.floor(steps / 5)));
-  // Spectral params (sweet spot from empirical runs)
-  const notch = 2.45 + (Math.random()*0.3 - 0.15);      // ~2.3–2.6
-  const width = 2.5 + Math.random()*1.5;                 // ~2.5–4
-  const breakk = 0.65 + Math.random()*0.15;              // ~0.65–0.80
-  const fw = 0.52 + Math.random()*0.12;                  // FFT weight
-  const cw = 0.45 + Math.random()*0.12;                  // Corr weight
-  return {N, steps, cand, eliteN, patience, notch, width, breakk, fw, cw};
-}
+  let active = false, best = null, treeNodes = [], gpu = null, gpuReady = false;
 
-function rnd32(x){x|=0;x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return(x^(x>>>16))>>>0}
-function noise(i,s){return ((rnd32((i^s)>>>0)&0xffffff)/16777215)*2-1}
-function fft1(re,im,inverse=false){
-  const n=re.length;
-  for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
-  for(let len=2;len<=n;len<<=1){
-    const ang=(inverse?2:-2)*Math.PI/len,wr0=Math.cos(ang),wi0=Math.sin(ang);
-    for(let i=0;i<n;i+=len){let wr=1,wi=0,half=len>>1;for(let j=0;j<half;j++){
-      let u=i+j,v=u+half,tr=re[v]*wr-im[v]*wi,ti=re[v]*wi+im[v]*wr;
-      re[v]=re[u]-tr;im[v]=im[u]-ti;re[u]+=tr;im[u]+=ti;
-      let q=wr*wr0-wi*wi0;wi=wr*wi0+wi*wr0;wr=q;
-    }}
-  }
-  if(inverse)for(let i=0;i<n;i++){re[i]/=n;im[i]/=n}
-}
-function fft2D(data,N,inverse=false){
-  const re=new Float32Array(N*N),im=new Float32Array(N*N);
-  re.set(data);
-  for(let y=0;y<N;y++){let r=new Float32Array(N),m=new Float32Array(N);for(let x=0;x<N;x++)r[x]=re[y*N+x];fft1(r,m,inverse);for(let x=0;x<N;x++){re[y*N+x]=r[x];im[y*N+x]=m[x]}}
-  for(let x=0;x<N;x++){let r=new Float32Array(N),m=new Float32Array(N);for(let y=0;y<N;y++){r[y]=re[y*N+x];m[y]=im[y*N+x]}fft1(r,m,inverse);for(let y=0;y<N;y++){re[y*N+x]=r[y];im[y*N+x]=m[y]}}
-  return{re,im}
-}
-function spectralClean(re,im,N,threshold,width){
-  const bins=new Float32Array(N/2+1),cnt=new Uint32Array(N/2+1);
-  for(let y=0;y<N;y++)for(let x=0;x<N;x++){let dx=x-N/2,dy=y-N/2,r=Math.min(N>>1,Math.hypot(dx,dy)|0),q=Math.hypot(re[y*N+x],im[y*N+x]);bins[r]+=q;cnt[r]++}
-  for(let r=0;r<bins.length;r++)bins[r]/=Math.max(1,cnt[r]);
-  let removed=0;
-  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
-    let dx=x-N/2,dy=y-N/2,r=Math.min(N>>1,Math.hypot(dx,dy)|0),mag=Math.hypot(re[y*N+x],im[y*N+x]),ref=bins[r]+1e-6;
-    if(mag>ref*threshold && r>2){
-      const k=Math.max(0,1-(mag/ref-threshold)/(threshold*width));
-      re[y*N+x]*=k;im[y*N+x]*=k;if(k<.5)removed++;
-    }
-  }
-  return removed
-}
-function radialPeakMetric(re,im,N){
- let sum=0,max=0,n=0;for(let i=0;i<re.length;i++){let q=Math.hypot(re[i],im[i]);sum+=q;max=Math.max(max,q);n++}return max/(sum/n+1e-6)
-}
-function entropy(buf){
- const h=new Uint32Array(256);for(let i=0;i<buf.length;i+=Math.max(1,(buf.length/262144)|0))h[buf[i]]++;
- let H=0,n=h.reduce((a,b)=>a+b,0);for(let v of h)if(v){let p=v/n;H-=p*Math.log2(p)}return H/8
-}
-function autocorr(buf,N){
- let mean=0,n=N*N;for(let i=0;i<n;i++)mean+=buf[i];mean/=n;
- let den=0,num=0,lag=Math.max(1,(N/16)|0);
- for(let i=0;i<n;i++){let d=buf[i]-mean;den+=d*d}
- for(let y=0;y<N;y++)for(let x=0;x<N-lag;x++){let a=buf[y*N+x]-mean,b=buf[y*N+x+lag]-mean;num+=a*b}
- return den?num/Math.max(1,den):0
-}
-function smoothness(buf,N){let d=0,n=0;for(let y=0;y<N;y++)for(let x=0;x<N-1;x++){d+=Math.abs(buf[y*N+x]-buf[y*N+x+1]);n++}return 1-Math.min(1,d/(n*128))}
-function makeBase(N,seed,gen){
- const a=new Float32Array(N*N),phi=1.61803398875;
- for(let y=0;y<N;y++)for(let x=0;x<N;x++){
-  let i=y*N+x,t=2*Math.PI*phi*i/257+gen*.017, v=0;
-  v+=.23*Math.sin(t)+.16*Math.sin(t*.37+x*.013)+.12*Math.cos(t*.71+y*.017);
-  v+=.10*Math.sin(2*Math.PI*x/64+t*.03)+.08*Math.sin(2*Math.PI*y/97);
-  v+=.12*noise(i,seed)+.06*noise(i*3,seed^0x9e3779b9);
-  a[i]=Math.tanh(v)
- }
- return a
-}
-function applyBreakwater(a,N,k){
- for(let y=0;y<N;y++)for(let x=0;x<N;x++){let i=y*N+x,xx=x/N,yy=y/N;
-  let s=Math.max(0,Math.min(1,(xx-.08)/.2)),crest=Math.max(0,1-Math.abs(xx-.62)/.09),harbor=Math.max(0,(xx-.72)/.28);
-  let bk=k*(.25*s+.55*crest),ck=.1+.8*harbor;
-  a[i]=Math.tanh((a[i]*(1-bk*.35))*(1-ck*.45)+Math.tanh(a[i])*.15*ck)
- }
-}
-function render(buf,N){
- const im=ctx.createImageData(N,N);for(let i=0;i<buf.length;i++){let v=Math.max(0,Math.min(255,buf[i]+128)),o=i*4;im.data[o]=v;im.data[o+1]=Math.min(255,v*.75+30);im.data[o+2]=255-v*.8;im.data[o+3]=255}
- const tmp=document.createElement('canvas');tmp.width=N;tmp.height=N;tmp.getContext('2d').putImageData(im,0,0);ctx.imageSmoothingEnabled=false;ctx.drawImage(tmp,0,0,cv.width,cv.height)
-}
-function encodeBytes(a){const o=new Uint8Array(a.length);for(let i=0;i<a.length;i++)o[i]=Math.max(0,Math.min(255,(a[i]+128)|0));return o}
-function download(data,name,type='application/octet-stream'){let u=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
-async function gpuInit(){
- if(!navigator.gpu)return false;
- try{let ad=await navigator.gpu.requestAdapter();if(!ad)return false;gpu=await ad.requestDevice();gpuReady=true;ui('gpu','GPU WebGPU ✓');log('WebGPU compute device готов','ok');return true}catch(e){log('WebGPU: '+e.message,'warn');return false}
-}
-const WGSL=`struct P{n:u32;seed:u32;gen:u32;breakk:f32;};@group(0)@binding(0)var<storage,read> src:array<f32>;@group(0)@binding(1)var<storage,read_write> dst:array<f32>;@group(0)@binding(2)var<uniform> p:P;
-fn mix(x0:u32)->u32{var x=x0+0x9E3779B9u;x=(x^(x>>16u))*0x85EBCA6Bu;x=(x^(x>>13u))*0xC2B2AE35u;return x^(x>>16u);}
-@compute @workgroup_size(256)fn main(@builtin(global_invocation_id)g:vec3<u32>){let i=g.x;if(i>=p.n*p.n){return;}let x=i%p.n;let y=i/p.n;let t=f32(i)*.024+f32(p.gen)*.017;let q=f32(mix(i^p.seed)&65535u)/65535.;var v=.55*src[i]+.17*sin(t)+.11*cos(t*.37+f32(x)*.013)+.09*sin(f32(x)*.098)+.07*(q-.5);let xx=f32(x)/f32(p.n);let bk=p.breakk*(.25*clamp((xx-.08)/.2,0.,1.)+.55*max(0.,1.-abs(xx-.62)/.09));let harbor=max(0.,(xx-.72)/.28);let ck=.1+.8*harbor;v=v*(1.-bk*.35);v=v*(1.-ck*.45)+tanh(v)*.15*ck;dst[i]=tanh(v);}`;
-async function gpuStep(srcBuf,dstBuf,N,seed,gen,breakk){
- const module=gpu.createShaderModule({code:WGSL}),pipe=gpu.createComputePipeline({layout:'auto',compute:{module,entryPoint:'main'}});
- const ub=gpu.createBuffer({size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
- const dv=new DataView(new ArrayBuffer(16));dv.setUint32(0,N,true);dv.setUint32(4,seed>>>0,true);dv.setUint32(8,gen,true);dv.setFloat32(12,breakk,true);gpu.queue.writeBuffer(ub,0,dv.buffer);
- const bg=gpu.createBindGroup({layout:pipe.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:srcBuf}},{binding:1,resource:{buffer:dstBuf}},{binding:2,resource:{buffer:ub}}]});
- const enc=gpu.createCommandEncoder(),pass=enc.beginComputePass();pass.setPipeline(pipe);pass.setBindGroup(0,bg);pass.dispatchWorkgroups(Math.ceil(N*N/256));pass.end();gpu.queue.submit([enc.finish()]);await gpu.queue.onSubmittedWorkDone();ub.destroy()
-}
-function metricsFromFloat(a,N,fw,cw){
- const bytes=encodeBytes(a),m={entropy:entropy(bytes),corr:autocorr(bytes,N),smooth:smoothness(bytes,N)};
- const f=fft2D(a,N),peak=radialPeakMetric(f.re,f.im,N);
- // Adaptive weighted score
- const score = (0.30 + fw*0.15)*m.smooth
-             + (0.25 + cw*0.12)*(1-Math.min(1,Math.abs(m.corr)))
-             + 0.22*m.entropy
-             + 0.18/(1+peak/12);
- return{...m,peak,score}
-}
+  const log = (s, c = '') => {
+    const d = document.createElement('div');
+    d.className = c;
+    d.textContent = '[' + new Date().toLocaleTimeString() + '] ' + s;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
 
-async function optimize(){
- active=true;$('start').disabled=true;$('stop').disabled=false;$('png').disabled=$('raw').disabled=$('tree').disabled=true;
- const cfg = autoConfig();
- // Fill UI with auto values
- $('size').value = cfg.N;
- $('steps').value = cfg.steps;
- $('cand').value = cfg.cand;
- $('elite').value = cfg.eliteN;
- $('patience').value = cfg.patience;
- $('notch').value = cfg.notch.toFixed(2);
- $('width').value = cfg.width.toFixed(1);
- $('break').value = cfg.breakk.toFixed(2);
- $('fw').value = cfg.fw.toFixed(2);
- $('cw').value = cfg.cw.toFixed(2);
+  const ui = (id, v) => $(id).textContent = v;
 
- const N=cfg.N, steps=cfg.steps, cand=cfg.cand, eliteN=cfg.eliteN, pat=cfg.patience;
- const seed=(+$('seed').value>>>0);
- treeNodes=[];best=null;
- ui('status','running');ui('backend',gpuReady?'WebGPU':'CPU');ui('fft','2D radix-2 ✓');ui('simd',typeof WebAssembly==='object'?'WASM ✓':'JS');
- log(`AUTO: N=${N} · gens=${steps} · cand=${cand} · elite=${eliteN} · patience=${pat}`,'ok');
- log(`AUTO kernel: notch=${cfg.notch.toFixed(2)} width=${cfg.width.toFixed(1)} break=${cfg.breakk.toFixed(2)} fw=${cfg.fw.toFixed(2)} cw=${cfg.cw.toFixed(2)}`,'ok');
+  $('cap').textContent = `WebAssembly SIMD: ${typeof WebAssembly === 'object' ? 'available' : 'n/a'} · threads: ${navigator.hardwareConcurrency || '?'} · RAM hint: ${navigator.deviceMemory || '?'} GB`;
 
- let elite=[],no=0,start=performance.now();
- // Adaptive micro-tuning of notch during run
- let notch = cfg.notch, width = cfg.width, breakk = cfg.breakk;
-
- for(let gen=1;gen<=steps&&active;gen++){
-  ui('gen',`${gen}/${steps}`);$('prog').style.width=((gen-1)/steps*100)+'%';
-  // Slight adaptive drift of spectral params every few gens
-  if(gen % 5 === 0){
-    notch = Math.max(1.8, Math.min(4.5, notch + (Math.random()-0.5)*0.25));
-    width = Math.max(1.5, Math.min(6, width + (Math.random()-0.5)*0.4));
-    breakk = Math.max(0.5, Math.min(0.9, breakk + (Math.random()-0.5)*0.06));
-  }
-  let results=[];
-  for(let c=0;c<cand&&active;c++){
-   let s=rnd32(seed^Math.imul(gen,0x9e3779b9)^c*0x85ebca6b);
-   let a=makeBase(N,s,gen);
-   if(c&&elite.length){let parent=elite[c%elite.length].a;for(let i=0;i<a.length;i++)a[i]=.70*parent[i]+.30*a[i]}
-   applyBreakwater(a,N,breakk);
-   let F=fft2D(a,N);spectralClean(F.re,F.im,N,notch,width);
-   const ir=F.re,ii=F.im;
-   for(let y=0;y<N;y++){let r=new Float32Array(N),im=new Float32Array(N);for(let x=0;x<N;x++){r[x]=ir[y*N+x];im[x]=ii[y*N+x]}fft1(r,im,true);for(let x=0;x<N;x++){ir[y*N+x]=r[x];ii[y*N+x]=im[x]}}
-   for(let x=0;x<N;x++){let r=new Float32Array(N),im=new Float32Array(N);for(let y=0;y<N;y++){r[y]=ir[y*N+x];im[y]=ii[y*N+x]}fft1(r,im,true);for(let y=0;y<N;y++)a[y*N+x]=Math.tanh(r[y])}
-   const met=metricsFromFloat(a,N,cfg.fw,cfg.cw),node={id:treeNodes.length,parent:elite.length?elite[c%elite.length].id:null,gen,score:met.score,metrics:met,seed:s,a};
-   results.push(node);treeNodes.push({...node,a:null});
-   if(!best||met.score>best.score)best=node;
-   ui('nodes',treeNodes.length);ui('score',met.score.toFixed(5));ui('entropy',met.entropy.toFixed(3));ui('peak',met.peak.toFixed(3));ui('corr',met.corr.toFixed(3));ui('smooth',met.smooth.toFixed(3));
-   render(a,N);await new Promise(r=>setTimeout(r,0));
-  }
-  results.sort((a,b)=>b.score-a.score);elite.push(...results.slice(0,eliteN));elite.sort((a,b)=>b.score-a.score);elite=elite.slice(0,eliteN);
-  let improved=elite[0]===best;
-  if(improved){no=0;ui('best',best.score.toFixed(5));log(`GEN ${gen}: BEST score=${best.score.toFixed(5)} peak=${best.metrics.peak.toFixed(3)} corr=${best.metrics.corr.toFixed(3)}`,'ok')}
-  else{no++;log(`GEN ${gen}: no improvement ${no}/${pat}`,'warn')}
-  if(no>=pat&&gen>=4){log(`Early stop (patience ${pat})`,'warn');break}
- }
- if(best){render(best.a,N);$('png').disabled=$('raw').disabled=$('tree').disabled=false;ui('memory',(best.a.byteLength/1048576).toFixed(2)+' MB');ui('status','ready');log(`Готово за ${((performance.now()-start)/1000).toFixed(1)} s · best=${best.score.toFixed(5)}`,'ok')}
- else ui('status','stopped');
- active=false;$('start').disabled=false;$('stop').disabled=true;$('prog').style.width='100%'
-}
-function stop(){active=false;ui('status','stopping…');log('Стоп')}
-function clearTree(){treeNodes=[];best=null;ui('nodes','0');ui('best','—');log('Дерево очищено')}
-$('start').onclick=async()=>{await gpuInit();optimize().catch(e=>{active=false;log(e.stack||e,'bad');ui('status','error');$('start').disabled=false;$('stop').disabled=true})};
-$('stop').onclick=stop;$('clear').onclick=clearTree;
-$('png').onclick=()=>{if(!best)return;let N=+$('size').value,tmp=document.createElement('canvas');tmp.width=N;tmp.height=N;let c=tmp.getContext('2d'),im=c.createImageData(N,N),b=encodeBytes(best.a);for(let i=0;i<b.length;i++){let o=i*4,v=b[i];im.data[o]=v;im.data[o+1]=v;im.data[o+2]=v;im.data[o+3]=255}c.putImageData(im,0,0);tmp.toBlob(x=>download(x,'pattern_2D_FFT_auto.png','image/png'))};
-$('raw').onclick=()=>best&&download(encodeBytes(best.a),'pattern_2D_FFT_auto.bin');
-$('tree').onclick=()=>download(JSON.stringify({version:3,auto:true,N:+$('size').value,params:{notch:+$('notch').value,width:+$('width').value,break:+$('break').value},nodes:treeNodes.map(x=>({...x,a:undefined}))},null,2),'autocorrelation_pattern_tree_auto.json','application/json');
-$('ino').onclick=()=>download(`// AdaptivePattern_MatchWaves_Breakwater_Auto.ino
-// AdaptivePattern_MatchWaves_Breakwater_v3.ino
-// Динамический sin (без LUT), популяция, multi-metric, EEPROM, WDT-safe
-
-#include <Arduino.h>
-#include <EEPROM.h>
-
-#if defined(__AVR__)
-  #include <avr/wdt.h>
-#endif
-
-// ===================== КОНФИГ =====================
-static const uint16_t PAT_LEN        = 256;
-static const uint8_t  N_WAVES        = 6;
-static const uint8_t  POP_SIZE       = 3;
-static const uint8_t  ELITE          = 1;
-static const uint8_t  STAGNANT_MAX   = 8;
-static const uint16_t JITTER_SAMPLES = 120;
-static const bool     ENABLE_PWM_OUT = false;
-static const uint8_t  PWM_PIN        = 9;
-
-// ===================== Params =====================
-struct Params {
-  uint16_t C;
-  int16_t  V;
-  uint16_t adapt;
-  uint32_t seed;
-  // динамический sin
-  int16_t  sk1;     // ~350…460  (ном. 402)
-  int16_t  sk2;     // ~40…90    (ном. 64)
-  int16_t  sk3;     // ~4…20     (ном. 10)
-  int16_t  sphase;  // 0…255
-  int16_t  samp;    // ~200…300  (ном. 256 = 1.0)
-};
-
-static uint8_t pattern[PAT_LEN];
-static Params  pop[POP_SIZE];
-static float   fitness[POP_SIZE];
-static Params  bestP;
-static float   bestFit = 1e9f;
-static uint16_t stepId = 0;
-static uint8_t  stagnant = 0;
-static bool     wdtArmed = false;
-
-// Текущие коэффициенты sin (копируются из Params перед генерацией)
-static int16_t sin_k1 = 402, sin_k2 = 64, sin_k3 = 10, sin_phase = 0, sin_amp = 256;
-
-// ===================== Утилиты =====================
-static inline void kickWdt() {
-#if defined(__AVR__)
-  if (wdtArmed) wdt_reset();
-#endif
-}
-
-static uint32_t mix32(uint32_t x) {
-  x += 0x9E3779B9u;
-  x = (x ^ (x >> 16)) * 0x85EBCA6Bu;
-  x = (x ^ (x >> 13)) * 0xC2B2AE35u;
-  return x ^ (x >> 16);
-}
-
-static float constrainf(float v, float lo, float hi) {
-  return v < lo ? lo : (v > hi ? hi : v);
-}
-
-static float myLog2(float x) {
-  return logf(x) * 1.4426950408889634f;
-}
-
-// ===================== Динамический sin (без таблиц) =====================
-// Приближение sin(2π * idx/256) → Q15, полином + эволюционируемые k1/k2/k3/phase/amp
-static int16_t dynamicSin(uint8_t idx) {
-  uint8_t i = (uint8_t)(idx + (uint8_t)sin_phase);
-
-  int8_t sign = 1;
-  if (i >= 128) { sign = -1; i = (uint8_t)(i - 128); }
-  if (i >= 64)  { i = (uint8_t)(128 - i); }
-
-  // x в Q8: 0…256
-  int16_t x  = (int16_t)i * 4;
-  int16_t x2 = (int16_t)((x * x) >> 8);
-
-  int16_t t = (int16_t)(sin_k2 - ((x2 * sin_k3) >> 8));
-  int16_t u = (int16_t)(sin_k1 - ((x2 * t) >> 8));
-  int32_t y = ((int32_t)x * u) >> 3;
-
-  y = (y * sin_amp) >> 8;
-  if (y >  32767) y =  32767;
-  if (y < -32767) y = -32767;
-
-  return (int16_t)(sign * y);
-}
-
-static inline float sin01(uint8_t idx) {
-  return dynamicSin(idx) / 32768.0f;
-}
-
-static void applySinParams(const Params& p) {
-  sin_k1    = p.sk1;
-  sin_k2    = p.sk2;
-  sin_k3    = p.sk3;
-  sin_phase = p.sphase;
-  sin_amp   = p.samp;
-}
-
-// ===================== Генерация паттерна =====================
-static void rebuildPattern(const Params& p, uint16_t step) {
-  applySinParams(p);
-
-  uint32_t s1 = mix32(0xDEADBEEFu ^ p.seed ^ (uint32_t)(step * 0x9E37u));
-  uint32_t s2 = mix32(0x12345679u ^ p.seed ^ step);
-
-  float C     = 0.55f + (p.C / 65535.0f) * 1.35f;
-  float adapt = 0.65f + (p.adapt / 65535.0f) * 1.15f;
-  float V     = p.V * 0.01f;
-
-  float smooth = constrainf(0.50f + 0.40f * C, 0.50f, 0.93f);
-  float drive  = constrainf(1.30f - 0.40f * C, 0.50f, 1.25f);
-  float prev   = V;
-
-  for (uint16_t i = 0; i < PAT_LEN; i++) {
-    if ((i & 31) == 0) kickWdt();
-
-    s1 = mix32(s1 + i);
-    s2 = mix32(s2 + i * 0x9E37u);
-
-    uint8_t ph1 = (uint8_t)((i * 4 + step) & 255);
-    uint8_t ph2 = (uint8_t)((i * 2 + (step >> 1)) & 255);
-    uint8_t ph3 = (uint8_t)((i + step) & 255);
-
-    float cpu = sin01(ph1);
-    float ram = sin01(ph2);
-    float a   = sin01(ph3);
-    float b   = sin01((uint8_t)(ph3 + 85));
-
-    float waves = 0.0f;
-    for (uint8_t k = 0; k < N_WAVES; k++) {
-      uint8_t pk = (uint8_t)((i * (k + 3) + step * (k + 1)) & 255);
-      float amp = 1.0f / (1.0f + 0.12f * (float)k);
-      waves += amp * sin01(pk);
-    }
-    waves /= (float)N_WAVES;
-
-    float I = 0.5f * (a * a + b * b);
-    float damp = (I > 0.45f) ? (I - 0.45f) : 0.0f;
-
-    float raw = adapt * (0.14f * cpu + 0.12f * ram + 0.10f * a + 0.08f * b)
-              + 0.28f * waves
-              + 0.04f * ((s1 & 255) / 255.0f)
-              + 0.03f * ((s2 & 255) / 255.0f)
-              - 0.04f * damp * adapt;
-
-    raw = tanhf(raw * drive);
-
-    float x = (float)(i & 127) / 128.0f;
-    float stepK  = constrainf((x - 0.15f) / 0.35f, 0.0f, 1.0f);
-    float crest  = max(0.0f, 1.0f - fabsf(x - 0.55f) / 0.10f);
-    float harbor = constrainf((x - 0.65f) / 0.35f, 0.0f, 1.0f);
-    float breakK = 0.4f * stepK + 0.5f * crest;
-    float calmK  = 0.2f + 0.6f * harbor;
-    float ripple = raw - prev;
-    raw = raw - breakK * 0.55f * ripple;
-    raw = raw * (1.0f - calmK * 0.5f) + prev * calmK * 0.5f;
-    raw = tanhf(raw);
-
-    float v = raw * (1.0f - smooth) + prev * smooth;
-    prev = v;
-
-    pattern[i] = (uint8_t)((int)floorf((v + 1.0f) * 127.5f) & 255);
-  }
-}
-
-// ===================== Fitness =====================
-static float measureFitness() {
-  uint32_t prev = micros();
-  for (uint16_t i = 0; i < 16; i++) {
-    volatile uint32_t sink = mix32(i ^ bestP.seed);
-    sink ^= pattern[i & (PAT_LEN - 1)];
-    (void)sink;
-    prev = micros();
+  /* ========== AUTO CONFIG ========== */
+  function autoConfig() {
+    const cores = navigator.hardwareConcurrency || 4;
+    const ram = navigator.deviceMemory || 4;
+    const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+    let N = mobile ? 256 : 512;
+    if (!mobile && ram >= 16 && cores >= 12) N = 1024;
+    else if (!mobile && ram >= 8 && cores >= 8) N = 768;
+    const budgetMs = mobile ? 4500 : Math.min(20000, 6000 + cores * 650 + ram * 250);
+    const cand = Math.min(12, Math.max(3, Math.round(Math.sqrt(cores) * 2)));
+    const eliteN = Math.max(2, Math.min(6, Math.floor(cand * 0.45)));
+    const steps = Math.min(60, Math.max(12, Math.round(budgetMs / 650)));
+    return {
+      N, steps, cand, eliteN,
+      patience: Math.max(4, Math.round(steps * 0.18)),
+      budgetMs,
+      notch: 2.35, width: 3.2, breakk: 0.70, fw: 0.58, cw: 0.50
+    };
   }
 
-  float sum = 0.0f, sum2 = 0.0f;
-  uint16_t valid = 0;
-  prev = micros();
-  for (uint16_t i = 0; i < JITTER_SAMPLES; i++) {
-    if ((i & 15) == 0) kickWdt();
-
-    volatile uint32_t sink = mix32(i ^ bestP.seed);
-    sink ^= pattern[i & (PAT_LEN - 1)];
-    (void)sink;
-    uint32_t now = micros();
-    float d = (float)(now - prev);
-    prev = now;
-    if (d < 80.0f) {
-      sum += d;
-      sum2 += d * d;
-      valid++;
-    }
+  function rnd32(x) {
+    x |= 0;
+    x = Math.imul(x ^ (x >>> 16), 0x7feb352d);
+    x = Math.imul(x ^ (x >>> 15), 0x846ca68b);
+    return (x ^ (x >>> 16)) >>> 0;
   }
-  if (valid < 40) return 1e6f;
 
-  float mean = sum / (float)valid;
-  float var  = sum2 / (float)valid - mean * mean;
-  if (var < 0.0f) var = 0.0f;
-  float jitter = sqrtf(var);
-
-  float diffSum = 0.0f;
-  for (uint16_t i = 1; i < PAT_LEN; i++) {
-    diffSum += (float)abs((int)pattern[i] - (int)pattern[i - 1]);
+  function noise(i, s) {
+    return ((rnd32((i ^ s) >>> 0) & 0xffffff) / 16777215) * 2 - 1;
   }
-  float smoothPen = diffSum / (PAT_LEN * 128.0f);
 
-  uint16_t hist[16] = {0};
-  for (uint16_t i = 0; i < PAT_LEN; i += 4) {
-    hist[pattern[i] >> 4]++;
-  }
-  float entropy = 0.0f;
-  float invN = 4.0f / (float)PAT_LEN;
-  for (uint8_t h = 0; h < 16; h++) {
-    if (hist[h]) {
-      float p = hist[h] * invN;
-      entropy -= p * myLog2(p);
-    }
-  }
-  entropy /= 4.0f;
-
-  return jitter + smoothPen * 2.5f + (1.0f - entropy) * 1.8f;
-}
-
-// ===================== Эволюция =====================
-static Params mutate(const Params& base, uint8_t intensity) {
-  Params p = base;
-  uint32_t r = mix32(micros() ^ base.seed ^ (uint32_t)intensity ^ stepId);
-  float scale = (intensity == 0) ? 0.06f : (intensity == 1 ? 0.14f : 0.28f);
-
-  int16_t dC = (int16_t)(((r & 255) - 128) * scale * 400.0f);
-  p.C = (uint16_t)constrain((int32_t)p.C + dC, 0, 65535);
-
-  int16_t dV = (int16_t)((((r >> 8) & 255) - 128) * scale * 80.0f);
-  p.V = (int16_t)constrain((int32_t)p.V + dV, -2000, 2000);
-
-  int16_t dA = (int16_t)((((r >> 16) & 255) - 128) * scale * 350.0f);
-  p.adapt = (uint16_t)constrain((int32_t)p.adapt + dA, 0, 65535);
-
-  // мутация динамического sin
-  int16_t d1 = (int16_t)(((r & 31) - 15) * (1 + intensity));
-  p.sk1 = (int16_t)constrain((int32_t)base.sk1 + d1, 350, 460);
-
-  int16_t d2 = (int16_t)((((r >> 5) & 15) - 7) * (1 + intensity));
-  p.sk2 = (int16_t)constrain((int32_t)base.sk2 + d2, 40, 90);
-
-  int16_t d3 = (int16_t)((((r >> 9) & 7) - 3) * (1 + intensity));
-  p.sk3 = (int16_t)constrain((int32_t)base.sk3 + d3, 4, 20);
-
-  p.sphase = (int16_t)((base.sphase + (((r >> 12) & 15) - 7)) & 255);
-
-  int16_t da = (int16_t)((((r >> 16) & 15) - 7) * (1 + intensity));
-  p.samp = (int16_t)constrain((int32_t)base.samp + da, 200, 300);
-
-  if ((r & 15) == 0) p.seed ^= mix32(micros());
-  return p;
-}
-
-static void sortPopulation() {
-  for (uint8_t i = 0; i < POP_SIZE - 1; i++) {
-    for (uint8_t j = 0; j < POP_SIZE - 1 - i; j++) {
-      if (fitness[j] > fitness[j + 1]) {
-        float tf = fitness[j]; fitness[j] = fitness[j + 1]; fitness[j + 1] = tf;
-        Params tp = pop[j]; pop[j] = pop[j + 1]; pop[j + 1] = tp;
+  function fft1(re, im, inverse = false) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) {
+        let t = re[i]; re[i] = re[j]; re[j] = t;
+        t = im[i]; im[i] = im[j]; im[j] = t;
       }
     }
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = (inverse ? 2 : -2) * Math.PI / len;
+      const wr0 = Math.cos(ang), wi0 = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let wr = 1, wi = 0, half = len >> 1;
+        for (let j = 0; j < half; j++) {
+          let u = i + j, v = u + half;
+          let tr = re[v] * wr - im[v] * wi;
+          let ti = re[v] * wi + im[v] * wr;
+          re[v] = re[u] - tr; im[v] = im[u] - ti;
+          re[u] += tr; im[u] += ti;
+          let q = wr * wr0 - wi * wi0;
+          wi = wr * wi0 + wi * wr0; wr = q;
+        }
+      }
+    }
+    if (inverse) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+  }
+
+  function fft2D(data, N, inverse = false) {
+    const re = new Float32Array(N * N), im = new Float32Array(N * N);
+    re.set(data);
+    for (let y = 0; y < N; y++) {
+      let r = new Float32Array(N), m = new Float32Array(N);
+      for (let x = 0; x < N; x++) r[x] = re[y * N + x];
+      fft1(r, m, inverse);
+      for (let x = 0; x < N; x++) { re[y * N + x] = r[x]; im[y * N + x] = m[x]; }
+    }
+    for (let x = 0; x < N; x++) {
+      let r = new Float32Array(N), m = new Float32Array(N);
+      for (let y = 0; y < N; y++) { r[y] = re[y * N + x]; m[y] = im[y * N + x]; }
+      fft1(r, m, inverse);
+      for (let y = 0; y < N; y++) { re[y * N + x] = r[y]; im[y * N + x] = m[y]; }
+    }
+    return { re, im };
+  }
+
+  function spectralClean(re, im, N, threshold, width) {
+    const bins = new Float32Array(N / 2 + 1), cnt = new Uint32Array(N / 2 + 1);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      let dx = x - N / 2, dy = y - N / 2;
+      let r = Math.min(N >> 1, Math.hypot(dx, dy) | 0);
+      let q = Math.hypot(re[y * N + x], im[y * N + x]);
+      bins[r] += q; cnt[r]++;
+    }
+    for (let r = 0; r < bins.length; r++) bins[r] /= Math.max(1, cnt[r]);
+    let removed = 0;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      let dx = x - N / 2, dy = y - N / 2;
+      let r = Math.min(N >> 1, Math.hypot(dx, dy) | 0);
+      let mag = Math.hypot(re[y * N + x], im[y * N + x]);
+      let ref = bins[r] + 1e-6;
+      if (mag > ref * threshold && r > 2) {
+        const k = Math.max(0, 1 - (mag / ref - threshold) / (threshold * width));
+        re[y * N + x] *= k; im[y * N + x] *= k;
+        if (k < 0.5) removed++;
+      }
+    }
+    return removed;
+  }
+
+  function radialPeakMetric(re, im, N) {
+    let sum = 0, max = 0, n = 0;
+    for (let i = 0; i < re.length; i++) {
+      let q = Math.hypot(re[i], im[i]);
+      sum += q; max = Math.max(max, q); n++;
+    }
+    return max / (sum / n + 1e-6);
+  }
+
+  function entropy(buf) {
+    const h = new Uint32Array(256);
+    for (let i = 0; i < buf.length; i += Math.max(1, (buf.length / 262144) | 0)) h[buf[i]]++;
+    let H = 0, n = h.reduce((a, b) => a + b, 0);
+    for (let v of h) if (v) { let p = v / n; H -= p * Math.log2(p); }
+    return H / 8;
+  }
+
+  function autocorr(buf, N) {
+    let mean = 0, n = N * N;
+    for (let i = 0; i < n; i++) mean += buf[i];
+    mean /= n;
+    let den = 0, num = 0, lag = Math.max(1, (N / 16) | 0);
+    for (let i = 0; i < n; i++) { let d = buf[i] - mean; den += d * d; }
+    for (let y = 0; y < N; y++) for (let x = 0; x < N - lag; x++) {
+      let a = buf[y * N + x] - mean, b = buf[y * N + x + lag] - mean;
+      num += a * b;
+    }
+    return den ? num / Math.max(1, den) : 0;
+  }
+
+  function smoothness(buf, N) {
+    let d = 0, n = 0;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N - 1; x++) {
+      d += Math.abs(buf[y * N + x] - buf[y * N + x + 1]); n++;
+    }
+    return 1 - Math.min(1, d / (n * 128));
+  }
+
+  function makeBase(N, seed, gen) {
+    const a = new Float32Array(N * N);
+    const phi = 1.61803398875;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      let i = y * N + x;
+      let t = 2 * Math.PI * phi * i / 257 + gen * 0.017;
+      let v = 0;
+      v += 0.23 * Math.sin(t) + 0.16 * Math.sin(t * 0.37 + x * 0.013) + 0.12 * Math.cos(t * 0.71 + y * 0.017);
+      v += 0.10 * Math.sin(2 * Math.PI * x / 64 + t * 0.03) + 0.08 * Math.sin(2 * Math.PI * y / 97);
+      v += 0.12 * noise(i, seed) + 0.06 * noise(i * 3, seed ^ 0x9e3779b9);
+      a[i] = Math.tanh(v);
+    }
+    return a;
+  }
+
+  function applyBreakwater(a, N, k) {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      let i = y * N + x, xx = x / N, yy = y / N;
+      let s = Math.max(0, Math.min(1, (xx - 0.08) / 0.2));
+      let crest = Math.max(0, 1 - Math.abs(xx - 0.62) / 0.09);
+      let harbor = Math.max(0, (xx - 0.72) / 0.28);
+      let bk = k * (0.25 * s + 0.55 * crest), ck = 0.1 + 0.8 * harbor;
+      a[i] = Math.tanh((a[i] * (1 - bk * 0.35)) * (1 - ck * 0.45) + Math.tanh(a[i]) * 0.15 * ck);
+    }
+  }
+
+  function render(buf, N) {
+    const im = ctx.createImageData(N, N);
+    for (let i = 0; i < buf.length; i++) {
+      let v = Math.max(0, Math.min(255, buf[i] + 128));
+      let o = i * 4;
+      im.data[o] = v;
+      im.data[o + 1] = Math.min(255, v * 0.75 + 30);
+      im.data[o + 2] = 255 - v * 0.8;
+      im.data[o + 3] = 255;
+    }
+    const tmp = document.createElement('canvas');
+    tmp.width = N; tmp.height = N;
+    tmp.getContext('2d').putImageData(im, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmp, 0, 0, cv.width, cv.height);
+  }
+
+  function encodeBytes(a) {
+    const o = new Uint8Array(a.length);
+    for (let i = 0; i < a.length; i++) o[i] = Math.max(0, Math.min(255, (a[i] + 128) | 0));
+    return o;
+  }
+
+  function download(data, name, type = 'application/octet-stream') {
+    const u = URL.createObjectURL(new Blob([data], { type }));
+    const a = document.createElement('a');
+    a.href = u; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(u), 1000);
+  }
+
+  async function gpuInit() {
+    if (!navigator.gpu) return false;
+    try {
+      const ad = await navigator.gpu.requestAdapter();
+      if (!ad) return false;
+      gpu = await ad.requestDevice();
+      gpuReady = true;
+      ui('gpu', 'GPU WebGPU ✓');
+      log('WebGPU compute device готов', 'ok');
+      return true;
+    } catch (e) {
+      log('WebGPU: ' + e.message, 'warn');
+      return false;
+    }
+  }
+
+  function robustContrast(b) {
+    const v = Array.from(b);
+    v.sort((a, c) => a - c);
+    const q = p => v[Math.floor((v.length - 1) * p)];
+    return Math.min(1, (q(0.9) - q(0.1)) / 255);
+  }
+
+  function multiScale(buf, N) {
+    const st = Math.max(1, N >> 6);
+    let d = 0, n = 0;
+    for (let y = 0; y < N; y += st) for (let x = 0; x < N; x += st) {
+      const i = y * N + x;
+      if (x + st < N) { d += Math.abs(buf[i] - buf[i + st]); n++; }
+      if (y + st < N) { d += Math.abs(buf[i] - buf[i + st * N]); n++; }
+    }
+    return 1 - Math.min(1, d / Math.max(1, n * 128));
+  }
+
+  function spectralStability(re, im, N) {
+    const bins = new Float32Array(N / 2 + 1), cnt = new Uint32Array(N / 2 + 1);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const r = Math.min(N >> 1, Math.hypot(x - N / 2, y - N / 2) | 0);
+      const i = y * N + x;
+      bins[r] += Math.hypot(re[i], im[i]); cnt[r]++;
+    }
+    let mean = 0, m2 = 0, k = 0;
+    for (let r = 2; r < bins.length; r++) {
+      let v = bins[r] / Math.max(1, cnt[r]);
+      if (v > 0) {
+        k++;
+        let d = v - mean;
+        mean += d / k;
+        m2 += d * (v - mean);
+      }
+    }
+    return k < 2 ? 0 : 1 - Math.min(1, Math.sqrt(Math.max(0, m2 / (k - 1))) / (mean * 3 + 1e-6));
+  }
+
+  function metricsFromFloat(a, N, fw, cw) {
+    const bytes = encodeBytes(a);
+    const m = {
+      entropy: entropy(bytes),
+      corr: autocorr(bytes, N),
+      smooth: smoothness(bytes, N),
+      contrast: robustContrast(bytes),
+      structure: multiScale(bytes, N)
+    };
+    const f = fft2D(a, N);
+    const peak = radialPeakMetric(f.re, f.im, N);
+    const spectral = spectralStability(f.re, f.im, N);
+    const decor = 1 - Math.min(1, Math.abs(m.corr));
+    const score = (0.20 + fw * 0.12) * m.smooth +
+                  (0.20 + cw * 0.10) * decor +
+                  0.20 * m.entropy +
+                  0.16 * spectral +
+                  0.10 * m.structure +
+                  0.08 * m.contrast +
+                  0.14 / (1 + peak / 10);
+    return { ...m, peak, spectral, score };
+  }
+
+  async function adaptiveYield(st) {
+    if (performance.now() - st.last < st.slice) return;
+    st.last = performance.now();
+    await new Promise(r => setTimeout(r, 0));
+    const dt = performance.now() - st.last;
+    st.slice = dt > 18 ? Math.max(2, st.slice * 0.8) : Math.min(32, st.slice * 1.12);
+  }
+
+  async function optimize() {
+    active = true;
+    $('start').disabled = true;
+    $('stop').disabled = false;
+    $('png').disabled = $('raw').disabled = $('tree').disabled = true;
+
+    const cfg = autoConfig();
+    $('size').value = cfg.N;
+    $('steps').value = cfg.steps;
+    $('cand').value = cfg.cand;
+    $('elite').value = cfg.eliteN;
+    $('patience').value = cfg.patience;
+    $('notch').value = cfg.notch.toFixed(2);
+    $('width').value = cfg.width.toFixed(1);
+    $('break').value = cfg.breakk.toFixed(2);
+    $('fw').value = cfg.fw.toFixed(2);
+    $('cw').value = cfg.cw.toFixed(2);
+
+    const N = cfg.N, steps = cfg.steps, cand = cfg.cand, eliteN = cfg.eliteN, pat = cfg.patience;
+    const seed = (+$('seed').value >>> 0);
+    treeNodes = [];
+    best = null;
+
+    ui('status', 'running');
+    ui('backend', gpuReady ? 'WebGPU' : 'CPU');
+    ui('fft', '2D radix-2 ✓');
+    ui('simd', typeof WebAssembly === 'object' ? 'WASM ✓' : 'JS');
+
+    log(`AUTO: N=${N} · gens=${steps} · cand=${cand} · elite=${eliteN} · patience=${pat}`, 'ok');
+    log(`AUTO kernel: notch=${cfg.notch.toFixed(2)} width=${cfg.width.toFixed(1)} break=${cfg.breakk.toFixed(2)} fw=${cfg.fw.toFixed(2)} cw=${cfg.cw.toFixed(2)}`, 'ok');
+
+    let elite = [], no = 0, start = performance.now(), st = { last: performance.now(), slice: 10 };
+    let notch = cfg.notch, width = cfg.width, breakk = cfg.breakk;
+
+    for (let gen = 1; gen <= steps && active; gen++) {
+      if (performance.now() - start > cfg.budgetMs) break;
+      ui('gen', `${gen}/${steps}`);
+      $('prog').style.width = ((gen - 1) / steps * 100) + '%';
+
+      if (gen % 5 === 0) {
+        notch = Math.max(1.8, Math.min(4.5, notch + (Math.random() - 0.5) * 0.25));
+        width = Math.max(1.5, Math.min(6, width + (Math.random() - 0.5) * 0.4));
+        breakk = Math.max(0.5, Math.min(0.9, breakk + (Math.random() - 0.5) * 0.06));
+      }
+
+      let results = [];
+      for (let c = 0; c < cand && active; c++) {
+        let s = rnd32(seed ^ Math.imul(gen, 0x9e3779b9) ^ c * 0x85ebca6b);
+        let a = makeBase(N, s, gen);
+        if (c && elite.length) {
+          let parent = elite[c % elite.length].a;
+          for (let i = 0; i < a.length; i++) a[i] = 0.70 * parent[i] + 0.30 * a[i];
+        }
+        applyBreakwater(a, N, breakk);
+        let F = fft2D(a, N);
+        spectralClean(F.re, F.im, N, notch, width);
+        const ir = F.re, ii = F.im;
+        for (let y = 0; y < N; y++) {
+          let r = new Float32Array(N), im = new Float32Array(N);
+          for (let x = 0; x < N; x++) { r[x] = ir[y * N + x]; im[x] = ii[y * N + x]; }
+          fft1(r, im, true);
+          for (let x = 0; x < N; x++) { ir[y * N + x] = r[x]; ii[y * N + x] = im[x]; }
+        }
+        for (let x = 0; x < N; x++) {
+          let r = new Float32Array(N), im = new Float32Array(N);
+          for (let y = 0; y < N; y++) { r[y] = ir[y * N + x]; im[y] = ii[y * N + x]; }
+          fft1(r, im, true);
+          for (let y = 0; y < N; y++) a[y * N + x] = Math.tanh(r[y]);
+        }
+
+        const met = metricsFromFloat(a, N, cfg.fw, cfg.cw);
+        const node = { id: treeNodes.length, parent: elite.length ? elite[c % elite.length].id : null, gen, score: met.score, metrics: met, seed: s, a };
+        results.push(node);
+        treeNodes.push({ ...node, a: null });
+
+        if (!best || met.score > best.score) best = node;
+        ui('nodes', treeNodes.length);
+        ui('score', met.score.toFixed(5));
+        ui('entropy', met.entropy.toFixed(3));
+        ui('peak', met.peak.toFixed(3));
+        ui('corr', met.corr.toFixed(3));
+        ui('smooth', met.smooth.toFixed(3));
+        render(a, N);
+        await adaptiveYield(st);
+      }
+
+      results.sort((a, b) => b.score - a.score);
+      elite.push(...results.slice(0, eliteN));
+      elite.sort((a, b) => b.score - a.score);
+      elite = elite.slice(0, eliteN);
+
+      let improved = elite[0] === best;
+      if (improved) {
+        no = 0;
+        ui('best', best.score.toFixed(5));
+        log(`GEN ${gen}: BEST score=${best.score.toFixed(5)} peak=${best.metrics.peak.toFixed(3)} corr=${best.metrics.corr.toFixed(3)}`, 'ok');
+      } else {
+        no++;
+        log(`GEN ${gen}: no improvement ${no}/${pat}`, 'warn');
+      }
+      if (no >= pat && gen >= 4) {
+        log(`Early stop (patience ${pat})`, 'warn');
+        break;
+      }
+    }
+
+    if (best) {
+      render(best.a, N);
+      $('png').disabled = $('raw').disabled = $('tree').disabled = false;
+      ui('memory', (best.a.byteLength / 1048576).toFixed(2) + ' MB');
+      ui('status', 'ready');
+      log(`Готово за ${((performance.now() - start) / 1000).toFixed(1)} s · best=${best.score.toFixed(5)}`, 'ok');
+    } else {
+      ui('status', 'stopped');
+    }
+
+    active = false;
+    $('start').disabled = false;
+    $('stop').disabled = true;
+    $('prog').style.width = '100%';
+  }
+
+  function stop() {
+    active = false;
+    ui('status', 'stopping…');
+    log('Стоп');
+  }
+
+  function clearTree() {
+    treeNodes = [];
+    best = null;
+    ui('nodes', '0');
+    ui('best', '—');
+    log('Дерево очищено');
+  }
+
+  function buildArduinoSketch() {
+    return `// AdaptivePattern PRO v5
+// AUTO board-aware optimizer, robust timing score, EEPROM persistence.
+// No fixed delay in loop; yield() is used cooperatively.
+#include <Arduino.h>
+#include <EEPROM.h>
+#if defined(__AVR__)
+#include <avr/wdt.h>
+#endif
+#if defined(ESP32)
+  #define PAT_LEN 1024
+  #define N_WAVES 12
+  #define POP_SIZE 7
+  #define JITTER_SAMPLES 256
+#elif defined(ARDUINO_ARCH_RP2040)
+  #define PAT_LEN 512
+  #define N_WAVES 8
+  #define POP_SIZE 5
+  #define JITTER_SAMPLES 160
+#elif defined(__AVR__)
+  #define PAT_LEN 128
+  #define N_WAVES 4
+  #define POP_SIZE 3
+  #define JITTER_SAMPLES 80
+#else
+  #define PAT_LEN 512
+  #define N_WAVES 8
+  #define POP_SIZE 5
+  #define JITTER_SAMPLES 128
+#endif
+struct Params{
+  uint16_t smooth,adapt,waveMix,breakwater,noise;
+  int16_t drive;
+  uint32_t seed;
+  uint16_t phase;
+};
+static uint8_t pattern[PAT_LEN];
+static Params pop[POP_SIZE],bestP;
+static float fit[POP_SIZE],bestFit=1e30f;
+static uint32_t stepId=0;
+static uint16_t stagnant=0;
+static bool autoMode=true;
+static inline uint32_t mix32(uint32_t x){
+  x+=0x9E3779B9u;x=(x^(x>>16))*0x85EBCA6Bu;
+  x=(x^(x>>13))*0xC2B2AE35u;return x^(x>>16);
+}
+static inline float clampf(float x,float a,float b){return x<a?a:(x>b?b:x);}
+static inline float rnd(uint32_t &s){s=mix32(s);return (s&65535u)/65535.0f;}
+static inline void kick(){
+#if defined(__AVR__)
+  wdt_reset();
+#endif
+}
+static inline float fsin(float x){
+  while(x>3.14159265f)x-=6.28318531f;
+  while(x<-3.14159265f)x+=6.28318531f;
+  const float B=1.27323954f,C=-0.405284735f;
+  return B*x+C*x*fabsf(x);
+}
+static void makePattern(const Params&p){
+  uint32_t s=mix32(p.seed^stepId);
+  float sm=.42f+(p.smooth/65535.0f)*.50f;
+  float drive=.65f+p.drive*.0005f;
+  float adapt=.65f+(p.adapt/65535.0f)*1.15f;
+  float wm=p.waveMix/65535.0f,bw=p.breakwater/65535.0f,prev=0;
+  for(uint16_t i=0;i<PAT_LEN;i++){
+    if(!(i&31))kick();
+    float t=(float)i/PAT_LEN,w=0;
+    for(uint8_t k=0;k<N_WAVES;k++){
+      float f=1.0f+k*.73f+p.phase*.0004f;
+      w+=(1.0f/(1.0f+.13f*k))*fsin(6.28318531f*t*f);
+    }
+    w/=N_WAVES;
+    float n=(rnd(s)-.5f)*2.0f*(p.noise/65535.0f);
+    float v=adapt*(.45f*w*wm+.25f*fsin(6.28318531f*t*2.7f+p.phase*.024f)+.10f*n);
+    v=tanhf(v*drive);
+    float region=clampf((t-.10f)/.30f,0,1);
+    float crest=clampf(1.0f-fabsf(t-.58f)/.12f,0,1);
+    float harbor=clampf((t-.72f)/.28f,0,1);
+    float calm=bw*(.35f*region+.45f*crest+.35f*harbor);
+    v-=(v-prev)*calm*.65f;
+    v=v*(1.0f-calm*.35f)+prev*(calm*.35f);
+    v=v*(1.0f-sm)+prev*sm;prev=v;
+    pattern[i]=(uint8_t)constrain((int)((v+1)*127.5f),0,255);
   }
 }
-
-// ===================== EEPROM =====================
-static const uint8_t EEPROM_MAGIC = 0xB2;
-
-static void saveBest() {
-  EEPROM.update(0, EEPROM_MAGIC);
-  EEPROM.put(1, bestP);
-  EEPROM.put(1 + sizeof(Params), bestFit);
+static float jitter(){
+  uint32_t d[128];uint16_t n=min((uint16_t)128,(uint16_t)JITTER_SAMPLES);
+  uint32_t prev=micros();
+  for(uint16_t i=0;i<n;i++){
+    volatile uint32_t z=mix32(bestP.seed+i)^pattern[i&(PAT_LEN-1)];(void)z;
+    uint32_t now=micros();d[i]=now-prev;prev=now;
+  }
+  for(uint16_t i=1;i<n;i++){uint32_t x=d[i];int j=i-1;while(j>=0&&d[j]>x){d[j+1]=d[j];j--;}d[j+1]=x;}
+  float med=d[n/2],dev[128];
+  for(uint16_t i=0;i<n;i++)dev[i]=fabsf((float)d[i]-med);
+  for(uint16_t i=1;i<n;i++){float x=dev[i];int j=i-1;while(j>=0&&dev[j]>x){dev[j+1]=dev[j];j--;}dev[j+1]=x;}
+  float mad=dev[n/2],sum=0;uint16_t good=0;
+  for(uint16_t i=0;i<n;i++)if(fabsf((float)d[i]-med)<=max(4.0f,4.0f*mad)){sum+=fabsf((float)d[i]-med);good++;}
+  return good?sum/good:9999.0f;
 }
-
-static bool loadBest() {
-  if (EEPROM.read(0) != EEPROM_MAGIC) return false;
-  EEPROM.get(1, bestP);
-  EEPROM.get(1 + sizeof(Params), bestFit);
-  return true;
+static float structure(){
+  float edge=0;
+  for(uint16_t i=1;i<PAT_LEN;i++)edge+=fabsf((float)pattern[i]-pattern[i-1]);
+  edge/=((PAT_LEN-1)*128.0f);
+  uint16_t h[16]={0};
+  for(uint16_t i=0;i<PAT_LEN;i+=2)h[pattern[i]>>4]++;
+  float H=0,n=(PAT_LEN+1)/2.0f;
+  for(uint8_t i=0;i<16;i++)if(h[i]){float q=h[i]/n;H-=q*(logf(q)/.69314718056f);}
+  return edge*2.2f+(1.0f-H/4.0f)*1.6f;
 }
-
-// ===================== setup =====================
-void setup() {
+static float evaluate(const Params&p){makePattern(p);return jitter()+2.4f*structure();}
+static Params mutate(Params p,uint8_t level){
+  uint32_t r=mix32(p.seed^stepId^(uint32_t)level*0x9E37u);
+  float k=level==0?.04f:(level==1?.10f:.22f);
+  p.smooth=(uint16_t)constrain((int32_t)p.smooth+((int)(r&255)-128)*k*500,0,65535);
+  p.adapt=(uint16_t)constrain((int32_t)p.adapt+((int)((r>>8)&255)-128)*k*500,0,65535);
+  p.waveMix=(uint16_t)constrain((int32_t)p.waveMix+((int)((r>>16)&255)-128)*k*500,0,65535);
+  p.breakwater=(uint16_t)constrain((int32_t)p.breakwater+((int)((r>>24)&255)-128)*k*500,0,65535);
+  p.noise=(uint16_t)constrain((int32_t)p.noise+((int)(mix32(r)&255)-128)*k*400,0,65535);
+  p.drive=(int16_t)constrain((int32_t)p.drive+((int)((mix32(r>>1)&255))-128)*k*10,-2000,2000);
+  p.phase=(p.phase+((r>>9)&31)-15)&1023;
+  if(!(r&31))p.seed=mix32(p.seed^r);
+  return p;
+}
+static void sortPop(){
+  for(uint8_t i=0;i<POP_SIZE;i++)for(uint8_t j=i+1;j<POP_SIZE;j++)
+    if(fit[j]<fit[i]){float f=fit[i];fit[i]=fit[j];fit[j]=f;Params p=pop[i];pop[i]=pop[j];pop[j]=p;}
+}
+static void saveBest(){EEPROM.put(0,bestP);EEPROM.put(sizeof(bestP),bestFit);}
+static bool loadBest(){EEPROM.get(0,bestP);EEPROM.get(sizeof(bestP),bestFit);return bestFit>0&&bestFit<1e20f;}
+static void initP(Params&p,uint32_t s){
+  p.smooth=35000+(mix32(s)&12000);p.adapt=30000+(mix32(s+1)&18000);
+  p.waveMix=40000+(mix32(s+2)&18000);p.breakwater=42000+(mix32(s+3)&18000);
+  p.noise=8000+(mix32(s+4)&12000);p.drive=100+(mix32(s+5)&300);
+  p.seed=mix32(s+6);p.phase=mix32(s+7)&1023;
+}
+void setup(){
   Serial.begin(115200);
-  delay(400);
-  while (!Serial && millis() < 2000) {;}
-
-  Serial.println();
-  Serial.println(F("MatchWaves v3 · dynamic sin · no LUT"));
-  Serial.flush();
-
-  uint32_t seed0 = micros() ^ 0xA5A5A5A5u;
-  for (uint8_t i = 0; i < POP_SIZE; i++) {
-    pop[i].C      = 30000 + (mix32(seed0 + i) & 0x3FFF);
-    pop[i].V      = (int16_t)((mix32(seed0 + i * 3) & 0x1FF) - 256);
-    pop[i].adapt  = 28000 + (mix32(seed0 + i * 7) & 0x3FFF);
-    pop[i].seed   = mix32(seed0 ^ (i * 0x9E3779B9u));
-    pop[i].sk1    = 402;
-    pop[i].sk2    = 64;
-    pop[i].sk3    = 10;
-    pop[i].sphase = 0;
-    pop[i].samp   = 256;
-  }
-
-  if (loadBest()) {
-    pop[0] = bestP;
-    Serial.print(F("EEPROM bestFit="));
-    Serial.println(bestFit, 4);
-  }
-
-  Serial.println(F("Evaluating population..."));
-  Serial.flush();
-
-  for (uint8_t i = 0; i < POP_SIZE; i++) {
-    Serial.print(F("  cand "));
-    Serial.print(i);
-    Serial.print(F(" ... "));
-    Serial.flush();
-
-    rebuildPattern(pop[i], stepId);
-    fitness[i] = measureFitness();
-
-    Serial.println(fitness[i], 4);
-    Serial.flush();
-  }
-
-  sortPopulation();
-  bestP   = pop[0];
-  bestFit = fitness[0];
-
-  Serial.print(F("initial best="));
-  Serial.println(bestFit, 4);
-  Serial.print(F("sin k1="));
-  Serial.print(bestP.sk1);
-  Serial.print(F(" k2="));
-  Serial.print(bestP.sk2);
-  Serial.print(F(" k3="));
-  Serial.print(bestP.sk3);
-  Serial.print(F(" ph="));
-  Serial.print(bestP.sphase);
-  Serial.print(F(" amp="));
-  Serial.println(bestP.samp);
-  Serial.println(F("Entering loop"));
-  Serial.flush();
-
+  uint32_t s=micros()^0xC001D00Du;
+  for(uint8_t i=0;i<POP_SIZE;i++)initP(pop[i],s+i*0x9E3779B9u);
+  if(loadBest())pop[0]=bestP;
+  for(uint8_t i=0;i<POP_SIZE;i++)fit[i]=evaluate(pop[i]);
+  sortPop();bestP=pop[0];bestFit=fit[0];saveBest();
 #if defined(__AVR__)
   wdt_enable(WDTO_4S);
-  wdtArmed = true;
 #endif
-
-  if (ENABLE_PWM_OUT) {
-    pinMode(PWM_PIN, OUTPUT);
-#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
-    TCCR1A = _BV(COM1A1) | _BV(WGM10);
-    TCCR1B = _BV(WGM12) | _BV(CS10);
-#endif
-  }
+  Serial.println(F("AdaptivePattern PRO v5 READY"));
 }
-
-// ===================== loop =====================
-void loop() {
-  kickWdt();
+void loop(){
+  kick();
+  if(Serial.available()){
+    char c=Serial.read();
+    if(c=='S'){Serial.print(F("best="));Serial.print(bestFit,4);Serial.print(F(" stagnant="));Serial.println(stagnant);}
+    if(c=='P')autoMode=!autoMode;
+    if(c=='R'){bestP.seed=mix32(micros());stagnant=0;Serial.println(F("RESEED"));}
+  }
+  if(!autoMode){yield();return;}
   stepId++;
-
-  for (uint8_t i = ELITE; i < POP_SIZE; i++) {
-    uint8_t parent = i % ELITE;
-    uint8_t intensity = stagnant > 5 ? 2 : (stagnant > 2 ? 1 : 0);
-    pop[i] = mutate(pop[parent], intensity);
+  uint8_t level=stagnant>8?2:(stagnant>3?1:0);
+  for(uint8_t i=1;i<POP_SIZE;i++)pop[i]=mutate(bestP,level);
+  for(uint8_t i=0;i<POP_SIZE;i++){fit[i]=evaluate(pop[i]);kick();}
+  sortPop();
+  if(fit[0]<bestFit-.01f){
+    bestFit=fit[0];bestP=pop[0];stagnant=0;saveBest();
+    Serial.print(F("IMPROVED "));Serial.println(bestFit,4);
+  }else if(++stagnant>16){
+    bestP.seed=mix32(bestP.seed^micros()^stepId);
+    bestP.phase=(bestP.phase+37)&1023;
+    stagnant=0;Serial.println(F("AUTO RESEED"));
   }
-
-  for (uint8_t i = 0; i < POP_SIZE; i++) {
-    rebuildPattern(pop[i], stepId);
-    fitness[i] = measureFitness();
-    kickWdt();
-  }
-  sortPopulation();
-
-  if (fitness[0] + 0.008f < bestFit) {
-    bestFit = fitness[0];
-    bestP   = pop[0];
-    stagnant = 0;
-    saveBest();
-    Serial.print(F("IMPROVED "));
-    Serial.print(bestFit, 4);
-    Serial.print(F("  sin="));
-    Serial.print(bestP.sk1);
-    Serial.print(',');
-    Serial.print(bestP.sk2);
-    Serial.print(',');
-    Serial.print(bestP.sk3);
-    Serial.print(',');
-    Serial.print(bestP.sphase);
-    Serial.print(',');
-    Serial.println(bestP.samp);
-  } else {
-    stagnant++;
-    for (uint8_t i = 0; i < ELITE; i++) {
-      pop[i] = bestP;
-      fitness[i] = bestFit;
-    }
-    Serial.print(F("reject "));
-    Serial.print(fitness[0], 4);
-    Serial.print(F(" best="));
-    Serial.println(bestFit, 4);
-  }
-
-  if (stagnant >= STAGNANT_MAX) {
-    bestP.seed ^= mix32(micros() ^ 0x5A5A5A5Au);
-    // лёгкий толчок sin-параметров при ресееде
-    bestP.sphase = (int16_t)((bestP.sphase + 17) & 255);
-    stagnant = 0;
-    Serial.println(F("reseed"));
-  }
-
-  if (ENABLE_PWM_OUT) {
-    static uint16_t idx = 0;
-#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
-    OCR1A = pattern[idx++];
-#else
-    analogWrite(PWM_PIN, pattern[idx++]);
-#endif
-    if (idx >= PAT_LEN) idx = 0;
-  }
-
-  delay(20);
+  yield();
 }
-`,'AdaptivePattern_MatchWaves_Breakwater_Auto.ino','text/plain');
-ctx.fillStyle='#000';ctx.fillRect(0,0,cv.width,cv.height);
+`;
+  }
+
+  $('start').onclick = async () => {
+    await gpuInit();
+    optimize().catch(e => {
+      active = false;
+      log(e.stack || e, 'bad');
+      ui('status', 'error');
+      $('start').disabled = false;
+      $('stop').disabled = true;
+    });
+  };
+
+  $('stop').onclick = stop;
+  $('clear').onclick = clearTree;
+
+  $('png').onclick = () => {
+    if (!best) return;
+    let N = +$('size').value;
+    let tmp = document.createElement('canvas');
+    tmp.width = N; tmp.height = N;
+    let c = tmp.getContext('2d');
+    let im = c.createImageData(N, N);
+    let b = encodeBytes(best.a);
+    for (let i = 0; i < b.length; i++) {
+      let o = i * 4, v = b[i];
+      im.data[o] = v; im.data[o + 1] = v; im.data[o + 2] = v; im.data[o + 3] = 255;
+    }
+    c.putImageData(im, 0, 0);
+    tmp.toBlob(x => download(x, 'pattern_2D_FFT_auto.png', 'image/png'));
+  };
+
+  $('raw').onclick = () => best && download(encodeBytes(best.a), 'pattern_2D_FFT_auto.bin');
+
+  $('tree').onclick = () => download(
+    JSON.stringify({
+      version: 3,
+      auto: true,
+      N: +$('size').value,
+      params: {
+        notch: +$('notch').value,
+        width: +$('width').value,
+        break: +$('break').value
+      },
+      nodes: treeNodes.map(x => ({ ...x, a: undefined }))
+    }, null, 2),
+    'autocorrelation_pattern_tree_auto.json',
+    'application/json'
+  );
+
+  $('ino').onclick = () => download(buildArduinoSketch(), 'AdaptivePattern_PRO_v5.ino', 'text/plain');
+
+  ctx.fillStyle = '#0f1419';
+  ctx.fillRect(0, 0, cv.width, cv.height);
 })();
 </script>
 </body>
