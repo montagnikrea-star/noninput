@@ -47,7 +47,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     (положительные и отрицательные заряды уравнены по интегралу). 
     Автооценка зарядовой массы в реальном времени.
   </div>
-
   <div class="card">
     <div class="grid">
       <div>
@@ -61,13 +60,12 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
           <option>2048</option>
         </select>
       </div>
-      <div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" type="number" value="—" disabled></div>
-      <div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" type="number" value="—" disabled></div>
-      <div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" type="number" value="—" disabled></div>
-      <div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" type="number" value="—" disabled></div>
+      <div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" type="text" value="—" disabled></div>
+      <div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" type="text" value="—" disabled></div>
+      <div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" type="text" value="—" disabled></div>
+      <div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" type="text" value="—" disabled></div>
       <div><label>Seed</label><input id="seed" type="number" value="123456789"></div>
     </div>
-
     <div class="mode-card">
       <label>Режим R/W</label>
       <select id="rwMode">
@@ -76,7 +74,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         <option value="read_fast">Read faster</option>
       </select>
     </div>
-
     <div class="ssd-card">
       <label>
         <input type="checkbox" id="ssdZero" checked style="width:auto;margin-right:8px;vertical-align:middle">
@@ -87,9 +84,8 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         чтобы сумма всех зарядов была равна нулю. Положительная и отрицательная масса уравниваются.
       </div>
     </div>
-
-    **Summary:**
-Параметры ядра (AUTO)
+    <details>
+      <summary>Параметры ядра (AUTO)</summary>
       <div class="grid" style="margin-top:10px">
         <div><label>Notch</label><input id="notch" type="range" min="1.2" max="8" step=".05" value="2.4" disabled></div>
         <div><label>Width</label><input id="width" type="range" min="1" max="12" step=".5" value="2.9" disabled></div>
@@ -97,7 +93,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         <div><label>FFT weight</label><input id="fw" type="range" min="0" max="1" step=".01" value=".35" disabled></div>
         <div><label>Memory weight</label><input id="mw" type="range" min="0" max="1" step=".01" value=".80" disabled></div>
       </div>
-
+    </details>
     <div class="row">
       <button id="start">Запустить SSD Zero-Charge Balancer</button>
       <button id="stop" class="s" disabled>Стоп</button>
@@ -112,7 +108,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     <div class="bar"><i id="prog"></i></div>
     <div id="cap" class="hint" style="margin-top:8px"></div>
   </div>
-
   <div class="two">
     <div class="card">
       <div class="hint" style="margin-bottom:8px">2D pattern · синий = + · красный = − · net charge → 0</div>
@@ -139,13 +134,11 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       </div>
     </div>
   </div>
-
   <div class="card">
     <div class="hint" style="margin-bottom:8px">Лог</div>
     <div id="log" class="log"></div>
   </div>
 </div>
-
 <script>
 (() => {
   'use strict';
@@ -153,7 +146,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
   const cv = $('cv'), ctx = cv.getContext('2d', {alpha:false});
   const logEl = $('log');
   let active = false, best = null, treeNodes = [];
-
   const log = (s, c='') => {
     const d = document.createElement('div');
     d.className = c;
@@ -162,9 +154,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     logEl.scrollTop = logEl.scrollHeight;
   };
   const ui = (id, v) => $(id).textContent = v;
-
   $('cap').textContent = `WASM: ${typeof WebAssembly==='object'?'yes':'n/a'} · threads: ${navigator.hardwareConcurrency||'?'} · RAM: ${navigator.deviceMemory||'?'} GB`;
-
   function autoConfig(N) {
     const cores = navigator.hardwareConcurrency || 4;
     const ram = navigator.deviceMemory || 4;
@@ -177,10 +167,8 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     return {N, steps, cand, eliteN, patience: Math.max(4, Math.round(steps*.22)), budgetMs,
             notch:2.3, width:2.8, breakk:.66, fw:.34, mw:.82};
   }
-
   function rnd32(x){x|=0;x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return(x^(x>>>16))>>>0}
   function noise(i,s){return ((rnd32((i^s)>>>0)&0xffffff)/16777215)*2-1}
-
   function fft1(re,im,inverse=false){
     const n=re.length;
     for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
@@ -194,14 +182,12 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     }
     if(inverse)for(let i=0;i<n;i++){re[i]/=n;im[i]/=n}
   }
-
   function fft2D(data,N){
     const re=new Float32Array(N*N),im=new Float32Array(N*N);re.set(data);
     for(let y=0;y<N;y++){let r=new Float32Array(N),m=new Float32Array(N);for(let x=0;x<N;x++)r[x]=re[y*N+x];fft1(r,m);for(let x=0;x<N;x++){re[y*N+x]=r[x];im[y*N+x]=m[x]}}
     for(let x=0;x<N;x++){let r=new Float32Array(N),m=new Float32Array(N);for(let y=0;y<N;y++){r[y]=re[y*N+x];m[y]=im[y*N+x]}fft1(r,m);for(let y=0;y<N;y++){re[y*N+x]=r[y];im[y*N+x]=m[y]}}
     return{re,im};
   }
-
   function spectralClean(re,im,N,threshold,width){
     const bins=new Float32Array(N/2+1),cnt=new Uint32Array(N/2+1);
     for(let y=0;y<N;y++)for(let x=0;x<N;x++){
@@ -218,7 +204,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       }
     }
   }
-
   function measureMemoryRW(buf, N) {
     const len = buf.length;
     const work = new Float32Array(buf);
@@ -248,7 +233,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       ratio: writeAvg > 1e-6 ? readAvg/writeAvg : 1
     };
   }
-
   // ========== SSD ZERO-CHARGE MASS ==========
   function assessChargeMass(a) {
     let posMass = 0, negMass = 0, net = 0, absMass = 0;
@@ -269,25 +253,21 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       mean: net / n
     };
   }
-
   // Принудительная балансировка до net charge = 0
   // и выравнивание положительной/отрицательной массы
   function enforceZeroChargeMass(a, N) {
     const n = a.length;
-
     // 1. Убираем mean → net = 0
     let mean = 0;
     for (let i = 0; i < n; i++) mean += a[i];
     mean /= n;
     for (let i = 0; i < n; i++) a[i] -= mean;
-
     // 2. Считаем текущие массы
     let posMass = 0, negMass = 0;
     for (let i = 0; i < n; i++) {
       if (a[i] > 0) posMass += a[i];
       else negMass += -a[i];
     }
-
     // 3. Если массы не равны — масштабируем меньшую сторону вверх
     //    (или большую вниз), чтобы posMass == negMass
     if (posMass > 1e-8 && negMass > 1e-8) {
@@ -299,7 +279,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         else a[i] *= negScale;
       }
     }
-
     // 4. Лёгкое локальное сглаживание, чтобы не было артефактов
     const tmp = new Float32Array(a);
     for (let y = 1; y < N - 1; y++) {
@@ -309,17 +288,14 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         a[i] = tmp[i] * 0.78 + local * 0.22;
       }
     }
-
     // 5. Финальный mean-removal (на случай накопления ошибки)
     mean = 0;
     for (let i = 0; i < n; i++) mean += a[i];
     mean /= n;
     for (let i = 0; i < n; i++) a[i] -= mean;
-
     // 6. Мягкий clip
     for (let i = 0; i < n; i++) a[i] = Math.tanh(a[i] * 1.05);
   }
-
   function makeBase(N, seed, gen) {
     const a = new Float32Array(N * N);
     const phi = 1.61803398875;
@@ -337,7 +313,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     }
     return a;
   }
-
   function applyBreakwater(a, N, k) {
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const i = y*N+x, xx = x/N;
@@ -348,7 +323,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       a[i] = Math.tanh(a[i]*(1-bk*0.30)*(1-ck*0.38) + Math.tanh(a[i])*0.11*ck);
     }
   }
-
   function render(buf, N) {
     const im = ctx.createImageData(N, N);
     for (let i = 0; i < buf.length; i++) {
@@ -368,17 +342,14 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(tmp, 0, 0, cv.width, cv.height);
   }
-
   function encodeBytes(a) {
     const o = new Uint8Array(a.length);
     for (let i = 0; i < a.length; i++) o[i] = Math.max(0, Math.min(255, ((a[i]+1)*127.5)|0));
     return o;
   }
-
   function metricsFromFloat(a, N, fw, mw, mode, ssdZero) {
     const rw = measureMemoryRW(a, N);
     const ch = assessChargeMass(a);
-
     const f = fft2D(a, N);
     let peak = 0, sum = 0;
     for (let i = 0; i < f.re.length; i++) {
@@ -386,7 +357,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       sum += q; peak = Math.max(peak, q);
     }
     peak = peak / (sum / f.re.length + 1e-6);
-
     let memScore;
     if (mode === 'write_fast') {
       memScore = 0.55*rw.writeSpeed + 0.25*rw.writeStab + 0.12*rw.readSpeed + 0.08*rw.readStab;
@@ -396,7 +366,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       const bal = 1 - Math.min(1, Math.abs(rw.readSpeed - rw.writeSpeed)*2.1);
       memScore = 0.31*rw.readSpeed + 0.31*rw.writeSpeed + 0.14*rw.readStab + 0.14*rw.writeStab + 0.10*bal;
     }
-
     // При SSD Zero — очень высокий вес balanceQ
     const chargeWeight = ssdZero ? 0.38 : 0.18;
     const score =
@@ -405,7 +374,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         (0.10 + fw*0.06) * (1/(1+peak/12)) +
         0.08 * ((rw.readStab + rw.writeStab)/2) +
         (ssdZero ? 0.12 * (1 - Math.min(1, Math.abs(ch.net)*80)) : 0.05);
-
     return {
       score, memScore,
       readSpeed: rw.readSpeed, writeSpeed: rw.writeSpeed,
@@ -414,7 +382,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       balanceQ: ch.balanceQ, mean: ch.mean, peak
     };
   }
-
   async function adaptiveYield(st) {
     if (performance.now() - st.last < st.slice) return;
     st.last = performance.now();
@@ -422,17 +389,14 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     const dt = performance.now() - st.last;
     st.slice = dt > 20 ? Math.max(2, st.slice*0.75) : Math.min(30, st.slice*1.12);
   }
-
   async function optimize() {
     active = true;
     $('start').disabled = true;
     $('stop').disabled = false;
     $('png').disabled = $('raw').disabled = $('tree').disabled = true;
-
     const mode = $('rwMode').value;
     const ssdZero = $('ssdZero').checked;
     let N = +$('size').value;
-
     const cfg = autoConfig(N);
     $('steps').value = cfg.steps;
     $('cand').value = cfg.cand;
@@ -443,49 +407,38 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     $('break').value = cfg.breakk.toFixed(2);
     $('fw').value = cfg.fw.toFixed(2);
     $('mw').value = cfg.mw.toFixed(2);
-
     const steps = cfg.steps, cand = cfg.cand, eliteN = cfg.eliteN, pat = cfg.patience;
     const seed = (+$('seed').value >>> 0);
     treeNodes = []; best = null;
-
     cv.width = Math.min(512, N);
     cv.height = Math.min(512, N);
-
     ui('status', 'running');
     ui('backend', 'CPU');
     ui('modePill', mode === 'balanced' ? 'Balanced' : mode === 'write_fast' ? 'Write>' : 'Read>');
     ui('ssdPill', ssdZero ? 'SSD Zero ON' : 'SSD Zero OFF');
-
     log(`SSD Zero-Charge Mass: ${ssdZero ? 'ENABLED' : 'disabled'}`, ssdZero ? 'ok' : 'warn');
-    log(`Size=\( {N} ( \){(N*N/1e6).toFixed(2)} M cells) · gens=${steps}`, 'ok');
-
+    log(`Size=${N} (${(N*N/1e6).toFixed(2)} M cells) · gens=${steps}`, 'ok');
     let elite = [], no = 0, start = performance.now();
     let notch = cfg.notch, width = cfg.width, breakk = cfg.breakk;
     const st = { last: performance.now(), slice: 8 };
-
     for (let gen = 1; gen <= steps && active; gen++) {
       if (performance.now() - start > cfg.budgetMs) break;
-      ui('gen', `\( {gen}/ \){steps}`);
+      ui('gen', `${gen}/${steps}`);
       $('prog').style.width = ((gen-1)/steps*100) + '%';
-
       if (gen % 4 === 0) {
         notch = Math.max(1.8, Math.min(4.0, notch + (Math.random()-0.5)*0.2));
         width = Math.max(1.7, Math.min(5.2, width + (Math.random()-0.5)*0.3));
         breakk = Math.max(0.5, Math.min(0.85, breakk + (Math.random()-0.5)*0.05));
       }
-
       const results = [];
       for (let c = 0; c < cand && active; c++) {
         const s = rnd32(seed ^ Math.imul(gen, 0x9e3779b9) ^ c * 0x85ebca6b);
         let a = makeBase(N, s, gen);
-
         if (c && elite.length) {
           const parent = elite[c % elite.length].a;
           for (let i = 0; i < a.length; i++) a[i] = 0.66*parent[i] + 0.34*a[i];
         }
-
         applyBreakwater(a, N, breakk);
-
         const F = fft2D(a, N);
         spectralClean(F.re, F.im, N, notch, width);
         for (let y = 0; y < N; y++) {
@@ -500,20 +453,16 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
           fft1(r, im, true);
           for (let y = 0; y < N; y++) a[y*N+x] = Math.tanh(r[y]);
         }
-
         // === КЛЮЧЕВОЙ ШАГ: SSD Zero-Charge Mass ===
         if (ssdZero) {
           enforceZeroChargeMass(a, N);
         }
-
         const met = metricsFromFloat(a, N, cfg.fw, cfg.mw, mode, ssdZero);
         const node = { id: treeNodes.length, parent: elite.length ? elite[c%elite.length].id : null,
                        gen, score: met.score, metrics: met, seed: s, a, mode, ssdZero };
         results.push(node);
         treeNodes.push({...node, a: null});
-
         if (!best || met.score > best.score) best = node;
-
         ui('nodes', `${treeNodes.length} / ${N}²`);
         ui('score', met.score.toFixed(5));
         ui('netCh', met.net.toExponential(2));
@@ -521,44 +470,37 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         ui('pmass', `${met.posMass.toFixed(1)} / ${met.negMass.toFixed(1)}`);
         ui('balQ', met.balanceQ.toFixed(4));
         ui('rwSp', `${met.readSpeed.toFixed(3)} / ${met.writeSpeed.toFixed(3)}`);
-
         render(a, N);
         await adaptiveYield(st);
       }
-
       results.sort((a,b) => b.score - a.score);
       elite.push(...results.slice(0, eliteN));
       elite.sort((a,b) => b.score - a.score);
       elite = elite.slice(0, eliteN);
-
       if (elite[0] === best) {
         no = 0;
         ui('best', best.score.toFixed(5));
-        log(`GEN ${gen}: BEST \( {best.score.toFixed(5)}  net= \){best.metrics.net.toExponential(2)}  balQ=\( {best.metrics.balanceQ.toFixed(4)}  +/−= \){best.metrics.posMass.toFixed(0)}/${best.metrics.negMass.toFixed(0)}`, 'ok');
+        log(`GEN ${gen}: BEST ${best.score.toFixed(5)}  net=${best.metrics.net.toExponential(2)}  balQ=${best.metrics.balanceQ.toFixed(4)}  +/−=${best.metrics.posMass.toFixed(0)}/${best.metrics.negMass.toFixed(0)}`, 'ok');
       } else {
         no++;
-        log(`GEN ${gen}: no improvement \( {no}/ \){pat}`, 'warn');
+        log(`GEN ${gen}: no improvement ${no}/${pat}`, 'warn');
       }
       if (no >= pat && gen >= 5) { log(`Early stop`, 'warn'); break; }
     }
-
     if (best) {
       render(best.a, N);
       $('png').disabled = $('raw').disabled = $('tree').disabled = false;
       ui('status', 'ready');
       const ch = assessChargeMass(best.a);
-      log(`Готово \( {((performance.now()-start)/1000).toFixed(1)}s · net= \){ch.net.toExponential(3)} · balanceQ=\( {ch.balanceQ.toFixed(5)} · mass= \){ch.absMass.toFixed(1)}`, 'ok');
+      log(`Готово ${((performance.now()-start)/1000).toFixed(1)}s · net=${ch.net.toExponential(3)} · balanceQ=${ch.balanceQ.toFixed(5)} · mass=${ch.absMass.toFixed(1)}`, 'ok');
     } else ui('status', 'stopped');
-
     active = false;
     $('start').disabled = false;
     $('stop').disabled = true;
     $('prog').style.width = '100%';
   }
-
   function stop(){ active=false; ui('status','stopping…'); log('Стоп'); }
   function clearTree(){ treeNodes=[]; best=null; ui('nodes','0'); ui('best','—'); log('Очищено'); }
-
   function buildArduinoSketch() {
     const mode = $('rwMode').value;
     const ssdZero = $('ssdZero').checked;
@@ -569,7 +511,6 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
 #if defined(__AVR__)
 #include <avr/wdt.h>
 #endif
-
 #if defined(ESP32)
   #define PAT_LEN 1024
   #define POP_SIZE 6
@@ -587,22 +528,18 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
   #define POP_SIZE 5
   #define SAMPLES 80
 #endif
-
 #define SSD_ZERO_CHARGE ${ssdZero ? 1 : 0}
-
 struct Params {
   uint16_t smooth, adapt, wave, breakw, noise;
   int16_t drive;
   uint32_t seed;
   uint16_t phase;
 };
-
 static int8_t pattern[PAT_LEN];
 static Params pop[POP_SIZE], bestP;
 static float fit[POP_SIZE], bestFit = 1e30f;
 static uint32_t stepId = 0;
 static uint16_t stagnant = 0;
-
 static inline uint32_t mix32(uint32_t x) {
   x += 0x9E3779B9u; x = (x^(x>>16))*0x85EBCA6Bu; x = (x^(x>>13))*0xC2B2AE35u; return x^(x>>16);
 }
@@ -617,7 +554,6 @@ static inline float fsin(float x){
   while(x<-3.14159265f)x+=6.28318531f;
   return 1.27323954f*x - 0.405284735f*x*fabsf(x);
 }
-
 static void makePattern(const Params& p) {
   uint32_t s = mix32(p.seed ^ stepId);
   float sm = 0.40f + (p.smooth/65535.0f)*0.48f;
@@ -644,14 +580,12 @@ static void makePattern(const Params& p) {
     v = v*(1.0f-sm) + prev*sm; prev = v;
     pattern[i] = (int8_t)constrain((int)(v*118.0f), -128, 127);
   }
-
 #if SSD_ZERO_CHARGE
   // === SSD Zero Charge Mass ===
   int32_t sum = 0;
   for (uint16_t i = 0; i < PAT_LEN; i++) sum += pattern[i];
   int8_t mean = (int8_t)(sum / (int32_t)PAT_LEN);
   for (uint16_t i = 0; i < PAT_LEN; i++) pattern[i] = (int8_t)constrain(pattern[i] - mean, -128, 127);
-
   // Выравнивание положительной и отрицательной массы
   int32_t posM = 0, negM = 0;
   for (uint16_t i = 0; i < PAT_LEN; i++) {
@@ -673,12 +607,10 @@ static void makePattern(const Params& p) {
   for (uint16_t i = 0; i < PAT_LEN; i++) pattern[i] = (int8_t)constrain(pattern[i] - mean, -128, 127);
 #endif
 }
-
 static float measureRW() {
   volatile int32_t sink = 0;
   uint32_t rTimes[20], wTimes[20];
   uint16_t n = min((uint16_t)20, (uint16_t)SAMPLES);
-
   for (uint16_t t = 0; t < n; t++) {
     uint32_t t0 = micros();
     for (uint16_t i = 0; i < PAT_LEN; i++) sink += pattern[i];
@@ -690,13 +622,11 @@ static float measureRW() {
     for (uint16_t i = 0; i < PAT_LEN; i++) pattern[i] ^= (int8_t)(i & 15);
     wTimes[t] = micros() - t0;
   }
-
   auto med = [](uint32_t* a, uint16_t n) {
     for (uint16_t i=1;i<n;i++){uint32_t x=a[i];int j=i-1;while(j>=0&&a[j]>x){a[j+1]=a[j];j--;}a[j+1]=x;}
     return a[n/2];
   };
   float rMed = med(rTimes, n), wMed = med(wTimes, n);
-
   int32_t sum = 0;
   for (uint16_t i = 0; i < PAT_LEN; i++) sum += pattern[i];
   float net = (float)sum;
@@ -705,7 +635,6 @@ static float measureRW() {
 #if SSD_ZERO_CHARGE
   netPen = fabsf(net) * 0.08f;
 #endif
-
   #if defined(MODE_WRITE_FAST)
     return wMed * 0.68f + rMed * 0.18f + netPen;
   #elif defined(MODE_READ_FAST)
@@ -714,9 +643,7 @@ static float measureRW() {
     return (rMed + wMed) * 0.40f + fabsf(rMed - wMed) * 0.22f + netPen;
   #endif
 }
-
 static float evaluate(const Params& p){ makePattern(p); return measureRW(); }
-
 static Params mutate(Params p, uint8_t level) {
   uint32_t r = mix32(p.seed ^ stepId ^ (uint32_t)level * 0x9E37u);
   float k = level==0 ? 0.05f : (level==1 ? 0.12f : 0.24f);
@@ -730,22 +657,18 @@ static Params mutate(Params p, uint8_t level) {
   if (!(r&31)) p.seed = mix32(p.seed ^ r);
   return p;
 }
-
 static void sortPop() {
   for (uint8_t i=0;i<POP_SIZE;i++) for (uint8_t j=i+1;j<POP_SIZE;j++)
     if (fit[j] < fit[i]) { float f=fit[i];fit[i]=fit[j];fit[j]=f; Params p=pop[i];pop[i]=pop[j];pop[j]=p; }
 }
-
 static void saveBest(){ EEPROM.put(0,bestP); EEPROM.put(sizeof(bestP),bestFit); }
 static bool loadBest(){ EEPROM.get(0,bestP); EEPROM.get(sizeof(bestP),bestFit); return bestFit>0 && bestFit<1e20f; }
-
 static void initP(Params& p, uint32_t s) {
   p.smooth=34000+(mix32(s)&11000); p.adapt=31000+(mix32(s+1)&16000);
   p.wave=39000+(mix32(s+2)&17000); p.breakw=41000+(mix32(s+3)&16000);
   p.noise=7000+(mix32(s+4)&11000); p.drive=80+(mix32(s+5)&280);
   p.seed=mix32(s+6); p.phase=mix32(s+7)&1023;
 }
-
 void setup() {
   Serial.begin(115200);
   uint32_t s = micros() ^ 0xC001D00Du;
@@ -760,7 +683,6 @@ void setup() {
   Serial.print(F("SSD_ZERO=")); Serial.print(SSD_ZERO_CHARGE);
   Serial.print(F(" best=")); Serial.println(bestFit, 3);
 }
-
 void loop() {
   kick();
   if (Serial.available()) {
@@ -785,21 +707,18 @@ void loop() {
 }
 `;
   }
-
   function download(data, name, type='application/octet-stream') {
     const u = URL.createObjectURL(new Blob([data], {type}));
     const a = document.createElement('a');
     a.href = u; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(u), 800);
   }
-
   $('start').onclick = () => optimize().catch(e => {
     active=false; log(e.stack||e,'bad'); ui('status','error');
     $('start').disabled=false; $('stop').disabled=true;
   });
   $('stop').onclick = stop;
   $('clear').onclick = clearTree;
-
   $('png').onclick = () => {
     if (!best) return;
     const N = +$('size').value;
@@ -812,8 +731,7 @@ void loop() {
     c.putImageData(im,0,0);
     tmp.toBlob(x => download(x, `ssd_zero_charge_${N}.png`, 'image/png'));
   };
-
-  \( ('raw').onclick = () => best && download(encodeBytes(best.a), `ssd_zero_charge_ \){+$('size').value}.bin`);
+  $('raw').onclick = () => best && download(encodeBytes(best.a), `ssd_zero_charge_${+$('size').value}.bin`);
   $('tree').onclick = () => download(JSON.stringify({
     version: 7, mode: $('rwMode').value, ssdZero: $('ssdZero').checked,
     N: +$('size').value, bestScore: best?.score,
@@ -821,7 +739,6 @@ void loop() {
     posMass: best?.metrics?.posMass, negMass: best?.metrics?.negMass,
     nodes: treeNodes.map(x => ({...x, a: undefined}))
   }, null, 2), `tree_ssd_zero.json`, 'application/json');
-
   $('ino').onclick = () => {
     let code = buildArduinoSketch();
     const mode = $('rwMode').value;
@@ -829,10 +746,9 @@ void loop() {
     else if (mode === 'read_fast') code = '#define MODE_READ_FAST\n' + code;
     download(code, `AdaptivePattern_SSD_ZeroCharge.ino`, 'text/plain');
   };
-
   ctx.fillStyle = '#0f1419';
   ctx.fillRect(0, 0, cv.width, cv.height);
 })();
 </script>
 </body>
-</html> 
+</html>
