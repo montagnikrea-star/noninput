@@ -43,9 +43,9 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
 <div class="wrap">
   <h1>Smart Pattern ∞ · SSD Zero-Charge Mass Balancer</h1>
   <div class="sub">
-    Автоматическая балансировка зарядовой массы SSD до <b>net charge = 0</b>
-    + принудительное распределение зарядов <b>без частот</b>
-    (спектр почти полностью очищен, остаются только самые низкие пространственные частоты).
+    Автоматическая балансировка зарядовой массы памяти SSD до <b>net charge = 0</b>
+    (положительные и отрицательные заряды уравнены по интегралу). 
+    Автооценка зарядовой массы в реальном времени.
   </div>
   <div class="card">
     <div class="grid">
@@ -60,10 +60,10 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
           <option>2048</option>
         </select>
       </div>
-      <div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" type="text" value="" disabled></div>
-      <div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" type="text" value="" disabled></div>
-      <div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" type="text" value="" disabled></div>
-      <div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" type="text" value="" disabled></div>
+      <div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" type="text" value="—" disabled></div>
+      <div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" type="text" value="—" disabled></div>
+      <div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" type="text" value="—" disabled></div>
+      <div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" type="text" value="—" disabled></div>
       <div><label>Seed</label><input id="seed" type="number" value="123456789"></div>
     </div>
     <div class="mode-card">
@@ -110,7 +110,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
   </div>
   <div class="two">
     <div class="card">
-      <div class="hint" style="margin-bottom:8px">2D pattern · синий = + · красный = − · net charge → 0 · частоты уничтожены</div>
+      <div class="hint" style="margin-bottom:8px">2D pattern · синий = + · красный = − · net charge → 0</div>
       <div class="view"><canvas id="cv" width="512" height="512"></canvas></div>
       <div class="pills">
         <span class="pill" id="backend">backend —</span>
@@ -253,45 +253,8 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       mean: net / n
     };
   }
-  // Жёсткое подавление всех частот (оставляем только очень низкие пространственные частоты)
-  // Цель: заряды распределены так, чтобы спектр почти не содержал колебаний
-  function killAllFrequencies(a, N) {
-    const F = fft2D(a, N);
-    const maxR = Math.max(2, (N * 0.018) | 0); // оставляем только ~1.8% самых низких частот
-    for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        const dx = Math.min(x, N - x);
-        const dy = Math.min(y, N - y);
-        const r = Math.hypot(dx, dy);
-        if (r > maxR) {
-          // полностью обнуляем все средние и высокие частоты
-          F.re[y * N + x] = 0;
-          F.im[y * N + x] = 0;
-        } else if (r > 1) {
-          // очень мягко приглушаем даже низкие
-          const k = 1 - (r - 1) / (maxR - 1 + 1e-6);
-          F.re[y * N + x] *= k * k;
-          F.im[y * N + x] *= k * k;
-        }
-      }
-    }
-    // inverse FFT
-    for (let y = 0; y < N; y++) {
-      const r = new Float32Array(N), im = new Float32Array(N);
-      for (let x = 0; x < N; x++) { r[x] = F.re[y * N + x]; im[x] = F.im[y * N + x]; }
-      fft1(r, im, true);
-      for (let x = 0; x < N; x++) { F.re[y * N + x] = r[x]; F.im[y * N + x] = im[x]; }
-    }
-    for (let x = 0; x < N; x++) {
-      const r = new Float32Array(N), im = new Float32Array(N);
-      for (let y = 0; y < N; y++) { r[y] = F.re[y * N + x]; im[y] = F.im[y * N + x]; }
-      fft1(r, im, true);
-      for (let y = 0; y < N; y++) a[y * N + x] = r[y];
-    }
-  }
-
   // Принудительная балансировка до net charge = 0
-  // + выравнивание +/− массы + уничтожение частот
+  // и выравнивание положительной/отрицательной массы
   function enforceZeroChargeMass(a, N) {
     const n = a.length;
     // 1. Убираем mean → net = 0
@@ -299,15 +262,14 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
     for (let i = 0; i < n; i++) mean += a[i];
     mean /= n;
     for (let i = 0; i < n; i++) a[i] -= mean;
-
     // 2. Считаем текущие массы
     let posMass = 0, negMass = 0;
     for (let i = 0; i < n; i++) {
       if (a[i] > 0) posMass += a[i];
       else negMass += -a[i];
     }
-
-    // 3. Выравниваем положительную и отрицательную массу
+    // 3. Если массы не равны — масштабируем меньшую сторону вверх
+    //    (или большую вниз), чтобы posMass == negMass
     if (posMass > 1e-8 && negMass > 1e-8) {
       const target = (posMass + negMass) * 0.5;
       const posScale = target / posMass;
@@ -317,47 +279,22 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         else a[i] *= negScale;
       }
     }
-
-    // 4. Сильное пространственное сглаживание (убивает высокие частоты ещё до FFT)
-    for (let pass = 0; pass < 3; pass++) {
-      const tmp = new Float32Array(a);
-      for (let y = 1; y < N - 1; y++) {
-        for (let x = 1; x < N - 1; x++) {
-          const i = y * N + x;
-          const local = (tmp[i-N-1] + tmp[i-N] + tmp[i-N+1] +
-                         tmp[i-1]   + tmp[i]   + tmp[i+1] +
-                         tmp[i+N-1] + tmp[i+N] + tmp[i+N+1]) / 9;
-          a[i] = tmp[i] * 0.35 + local * 0.65;
-        }
+    // 4. Лёгкое локальное сглаживание, чтобы не было артефактов
+    const tmp = new Float32Array(a);
+    for (let y = 1; y < N - 1; y++) {
+      for (let x = 1; x < N - 1; x++) {
+        const i = y * N + x;
+        const local = (tmp[i-N-1]+tmp[i-N]+tmp[i-N+1] + tmp[i-1]+tmp[i]+tmp[i+1] + tmp[i+N-1]+tmp[i+N]+tmp[i+N+1]) / 9;
+        a[i] = tmp[i] * 0.78 + local * 0.22;
       }
     }
-
-    // 5. Жёсткое спектральное обнуление всех частот кроме самых низких
-    killAllFrequencies(a, N);
-
-    // 6. Финальный mean-removal + повторное выравнивание масс
+    // 5. Финальный mean-removal (на случай накопления ошибки)
     mean = 0;
     for (let i = 0; i < n; i++) mean += a[i];
     mean /= n;
     for (let i = 0; i < n; i++) a[i] -= mean;
-
-    posMass = 0; negMass = 0;
-    for (let i = 0; i < n; i++) {
-      if (a[i] > 0) posMass += a[i];
-      else negMass += -a[i];
-    }
-    if (posMass > 1e-8 && negMass > 1e-8) {
-      const target = (posMass + negMass) * 0.5;
-      const posScale = target / posMass;
-      const negScale = target / negMass;
-      for (let i = 0; i < n; i++) {
-        if (a[i] > 0) a[i] *= posScale;
-        else a[i] *= negScale;
-      }
-    }
-
-    // 7. Мягкий clip
-    for (let i = 0; i < n; i++) a[i] = Math.tanh(a[i] * 1.02);
+    // 6. Мягкий clip
+    for (let i = 0; i < n; i++) a[i] = Math.tanh(a[i] * 1.05);
   }
   function makeBase(N, seed, gen) {
     const a = new Float32Array(N * N);
@@ -429,23 +366,20 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       const bal = 1 - Math.min(1, Math.abs(rw.readSpeed - rw.writeSpeed)*2.1);
       memScore = 0.31*rw.readSpeed + 0.31*rw.writeSpeed + 0.14*rw.readStab + 0.14*rw.writeStab + 0.10*bal;
     }
-    // При SSD Zero — высокий вес balanceQ + очень сильный штраф за любые частоты (peak)
-    const chargeWeight = ssdZero ? 0.32 : 0.16;
-    // peak близкий к 1 = почти нет частот (хорошо), высокий peak = много частот (плохо)
-    const freqPurity = 1 / (1 + peak / 3.5);   // сильно штрафуем любой спектральный пик
+    // При SSD Zero — очень высокий вес balanceQ
+    const chargeWeight = ssdZero ? 0.38 : 0.18;
     const score =
-        mw * 0.36 * memScore +
+        mw * 0.42 * memScore +
         chargeWeight * ch.balanceQ +
-        0.28 * freqPurity +                    // главный приоритет — отсутствие частот
-        (0.06 + fw * 0.04) * (1 / (1 + peak / 15)) +
-        0.06 * ((rw.readStab + rw.writeStab) / 2) +
-        (ssdZero ? 0.10 * (1 - Math.min(1, Math.abs(ch.net) * 90)) : 0.04);
+        (0.10 + fw*0.06) * (1/(1+peak/12)) +
+        0.08 * ((rw.readStab + rw.writeStab)/2) +
+        (ssdZero ? 0.12 * (1 - Math.min(1, Math.abs(ch.net)*80)) : 0.05);
     return {
       score, memScore,
       readSpeed: rw.readSpeed, writeSpeed: rw.writeSpeed,
       net: ch.net, absMass: ch.absMass,
       posMass: ch.posMass, negMass: ch.negMass,
-      balanceQ: ch.balanceQ, mean: ch.mean, peak, freqPurity
+      balanceQ: ch.balanceQ, mean: ch.mean, peak
     };
   }
   async function adaptiveYield(st) {
@@ -546,7 +480,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       if (elite[0] === best) {
         no = 0;
         ui('best', best.score.toFixed(5));
-        log(`GEN ${gen}: BEST ${best.score.toFixed(5)}  net=${best.metrics.net.toExponential(2)}  balQ=${best.metrics.balanceQ.toFixed(4)}  peak=${best.metrics.peak.toFixed(2)}  pure=${best.metrics.freqPurity.toFixed(3)}`, 'ok');
+        log(`GEN ${gen}: BEST ${best.score.toFixed(5)}  net=${best.metrics.net.toExponential(2)}  balQ=${best.metrics.balanceQ.toFixed(4)}  +/−=${best.metrics.posMass.toFixed(0)}/${best.metrics.negMass.toFixed(0)}`, 'ok');
       } else {
         no++;
         log(`GEN ${gen}: no improvement ${no}/${pat}`, 'warn');
@@ -558,7 +492,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       $('png').disabled = $('raw').disabled = $('tree').disabled = false;
       ui('status', 'ready');
       const ch = assessChargeMass(best.a);
-      log(`Готово ${((performance.now()-start)/1000).toFixed(1)}s · net=${ch.net.toExponential(3)} · balanceQ=${ch.balanceQ.toFixed(5)} · peak=${best.metrics.peak.toFixed(2)} · pure=${best.metrics.freqPurity.toFixed(3)}`, 'ok');
+      log(`Готово ${((performance.now()-start)/1000).toFixed(1)}s · net=${ch.net.toExponential(3)} · balanceQ=${ch.balanceQ.toFixed(5)} · mass=${ch.absMass.toFixed(1)}`, 'ok');
     } else ui('status', 'stopped');
     active = false;
     $('start').disabled = false;
