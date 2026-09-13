@@ -262,24 +262,19 @@ $('png').onclick=()=>{if(!best)return;let N=+$('size').value,tmp=document.create
 $('raw').onclick=()=>best&&download(encodeBytes(best.a),'pattern_2D_FFT_auto.bin');
 $('tree').onclick=()=>download(JSON.stringify({version:3,auto:true,N:+$('size').value,params:{notch:+$('notch').value,width:+$('width').value,break:+$('break').value},nodes:treeNodes.map(x=>({...x,a:undefined}))},null,2),'autocorrelation_pattern_tree_auto.json','application/json');
 $('ino').onclick=()=>download(`// AdaptivePattern_MatchWaves_Breakwater_Auto.ino
-// AdaptivePattern_MatchWaves_Breakwater_v2.ino
-// Улучшения: LUT sin, фиксированная точка, популяция, multi-metric fitness,
-// EEPROM, watchdog, платформенные оптимизации.
-
-// AdaptivePattern_MatchWaves_Breakwater_v2.1.ino
-// Фикс: watchdog reset loop, прогресс, легче для AVR
+// AdaptivePattern_MatchWaves_Breakwater_v3.ino
+// Динамический sin (без LUT), популяция, multi-metric, EEPROM, WDT-safe
 
 #include <Arduino.h>
 #include <EEPROM.h>
 
 #if defined(__AVR__)
   #include <avr/wdt.h>
-  #include <avr/pgmspace.h>
 #endif
 
-// ===================== КОНФИГ (легче для Uno) =====================
-static const uint16_t PAT_LEN        = 256;   // было 512 — быстрее
-static const uint8_t  N_WAVES        = 6;     // было 10
+// ===================== КОНФИГ =====================
+static const uint16_t PAT_LEN        = 256;
+static const uint8_t  N_WAVES        = 6;
 static const uint8_t  POP_SIZE       = 3;
 static const uint8_t  ELITE          = 1;
 static const uint8_t  STAGNANT_MAX   = 8;
@@ -293,6 +288,12 @@ struct Params {
   int16_t  V;
   uint16_t adapt;
   uint32_t seed;
+  // динамический sin
+  int16_t  sk1;     // ~350…460  (ном. 402)
+  int16_t  sk2;     // ~40…90    (ном. 64)
+  int16_t  sk3;     // ~4…20     (ном. 10)
+  int16_t  sphase;  // 0…255
+  int16_t  samp;    // ~200…300  (ном. 256 = 1.0)
 };
 
 static uint8_t pattern[PAT_LEN];
@@ -304,38 +305,10 @@ static uint16_t stepId = 0;
 static uint8_t  stagnant = 0;
 static bool     wdtArmed = false;
 
-// ===================== LUT SIN =====================
-#if defined(__AVR__)
-static const int16_t SIN_LUT[256] PROGMEM = {
-#else
-static const int16_t SIN_LUT[256] = {
-#endif
-  0,804,1608,2410,3212,4011,4808,5602,6393,7179,7962,8739,9512,10278,11039,11793,
-  12539,13279,14010,14732,15446,16151,16846,17530,18204,18868,19519,20159,20787,21403,22005,22594,
-  23170,23731,24279,24811,25329,25832,26319,26790,27245,27683,28105,28510,28898,29268,29621,29956,
-  30273,30571,30852,31113,31356,31580,31785,31971,32137,32285,32412,32521,32609,32678,32728,32757,
-  32767,32757,32728,32678,32609,32521,32412,32285,32137,31971,31785,31580,31356,31113,30852,30571,
-  30273,29956,29621,29268,28898,28510,28105,27683,27245,26790,26319,25832,25329,24811,24279,23731,
-  23170,22594,22005,21403,20787,20159,19519,18868,18204,17530,16846,16151,15446,14732,14010,13279,
-  12539,11793,11039,10278,9512,8739,7962,7179,6393,5602,4808,4011,3212,2410,1608,804,
-  0,-804,-1608,-2410,-3212,-4011,-4808,-5602,-6393,-7179,-7962,-8739,-9512,-10278,-11039,-11793,
-  -12539,-13279,-14010,-14732,-15446,-16151,-16846,-17530,-18204,-18868,-19519,-20159,-20787,-21403,-22005,-22594,
-  -23170,-23731,-24279,-24811,-25329,-25832,-26319,-26790,-27245,-27683,-28105,-28510,-28898,-29268,-29621,-29956,
-  -30273,-30571,-30852,-31113,-31356,-31580,-31785,-31971,-32137,-32285,-32412,-32521,-32609,-32678,-32728,-32757,
-  -32767,-32757,-32728,-32678,-32609,-32521,-32412,-32285,-32137,-31971,-31785,-31580,-31356,-31113,-30852,-30571,
-  -30273,-29956,-29621,-29268,-28898,-28510,-28105,-27683,-27245,-26790,-26319,-25832,-25329,-24811,-24279,-23731,
-  -23170,-22594,-22005,-21403,-20787,-20159,-19519,-18868,-18204,-17530,-16846,-16151,-15446,-14732,-14010,-13279,
-  -12539,-11793,-11039,-10278,-9512,-8739,-7962,-7179,-6393,-5602,-4808,-4011,-3212,-2410,-1608,-804
-};
+// Текущие коэффициенты sin (копируются из Params перед генерацией)
+static int16_t sin_k1 = 402, sin_k2 = 64, sin_k3 = 10, sin_phase = 0, sin_amp = 256;
 
-static inline int16_t fastSin(uint8_t idx) {
-#if defined(__AVR__)
-  return (int16_t)pgm_read_word(&SIN_LUT[idx]);
-#else
-  return SIN_LUT[idx];
-#endif
-}
-
+// ===================== Утилиты =====================
 static inline void kickWdt() {
 #if defined(__AVR__)
   if (wdtArmed) wdt_reset();
@@ -357,8 +330,46 @@ static float myLog2(float x) {
   return logf(x) * 1.4426950408889634f;
 }
 
-// ===================== Генерация =====================
+// ===================== Динамический sin (без таблиц) =====================
+// Приближение sin(2π * idx/256) → Q15, полином + эволюционируемые k1/k2/k3/phase/amp
+static int16_t dynamicSin(uint8_t idx) {
+  uint8_t i = (uint8_t)(idx + (uint8_t)sin_phase);
+
+  int8_t sign = 1;
+  if (i >= 128) { sign = -1; i = (uint8_t)(i - 128); }
+  if (i >= 64)  { i = (uint8_t)(128 - i); }
+
+  // x в Q8: 0…256
+  int16_t x  = (int16_t)i * 4;
+  int16_t x2 = (int16_t)((x * x) >> 8);
+
+  int16_t t = (int16_t)(sin_k2 - ((x2 * sin_k3) >> 8));
+  int16_t u = (int16_t)(sin_k1 - ((x2 * t) >> 8));
+  int32_t y = ((int32_t)x * u) >> 3;
+
+  y = (y * sin_amp) >> 8;
+  if (y >  32767) y =  32767;
+  if (y < -32767) y = -32767;
+
+  return (int16_t)(sign * y);
+}
+
+static inline float sin01(uint8_t idx) {
+  return dynamicSin(idx) / 32768.0f;
+}
+
+static void applySinParams(const Params& p) {
+  sin_k1    = p.sk1;
+  sin_k2    = p.sk2;
+  sin_k3    = p.sk3;
+  sin_phase = p.sphase;
+  sin_amp   = p.samp;
+}
+
+// ===================== Генерация паттерна =====================
 static void rebuildPattern(const Params& p, uint16_t step) {
+  applySinParams(p);
+
   uint32_t s1 = mix32(0xDEADBEEFu ^ p.seed ^ (uint32_t)(step * 0x9E37u));
   uint32_t s2 = mix32(0x12345679u ^ p.seed ^ step);
 
@@ -371,7 +382,7 @@ static void rebuildPattern(const Params& p, uint16_t step) {
   float prev   = V;
 
   for (uint16_t i = 0; i < PAT_LEN; i++) {
-    if ((i & 31) == 0) kickWdt();          // не даём WDT сработать
+    if ((i & 31) == 0) kickWdt();
 
     s1 = mix32(s1 + i);
     s2 = mix32(s2 + i * 0x9E37u);
@@ -380,16 +391,16 @@ static void rebuildPattern(const Params& p, uint16_t step) {
     uint8_t ph2 = (uint8_t)((i * 2 + (step >> 1)) & 255);
     uint8_t ph3 = (uint8_t)((i + step) & 255);
 
-    float cpu = fastSin(ph1) / 32768.0f;
-    float ram = fastSin(ph2) / 32768.0f;
-    float a   = fastSin(ph3) / 32768.0f;
-    float b   = fastSin((uint8_t)(ph3 + 85)) / 32768.0f;
+    float cpu = sin01(ph1);
+    float ram = sin01(ph2);
+    float a   = sin01(ph3);
+    float b   = sin01((uint8_t)(ph3 + 85));
 
     float waves = 0.0f;
     for (uint8_t k = 0; k < N_WAVES; k++) {
       uint8_t pk = (uint8_t)((i * (k + 3) + step * (k + 1)) & 255);
-      float amp = 1.0f / (1.0f + 0.12f * k);
-      waves += amp * (fastSin(pk) / 32768.0f);
+      float amp = 1.0f / (1.0f + 0.12f * (float)k);
+      waves += amp * sin01(pk);
     }
     waves /= (float)N_WAVES;
 
@@ -495,6 +506,21 @@ static Params mutate(const Params& base, uint8_t intensity) {
   int16_t dA = (int16_t)((((r >> 16) & 255) - 128) * scale * 350.0f);
   p.adapt = (uint16_t)constrain((int32_t)p.adapt + dA, 0, 65535);
 
+  // мутация динамического sin
+  int16_t d1 = (int16_t)(((r & 31) - 15) * (1 + intensity));
+  p.sk1 = (int16_t)constrain((int32_t)base.sk1 + d1, 350, 460);
+
+  int16_t d2 = (int16_t)((((r >> 5) & 15) - 7) * (1 + intensity));
+  p.sk2 = (int16_t)constrain((int32_t)base.sk2 + d2, 40, 90);
+
+  int16_t d3 = (int16_t)((((r >> 9) & 7) - 3) * (1 + intensity));
+  p.sk3 = (int16_t)constrain((int32_t)base.sk3 + d3, 4, 20);
+
+  p.sphase = (int16_t)((base.sphase + (((r >> 12) & 15) - 7)) & 255);
+
+  int16_t da = (int16_t)((((r >> 16) & 15) - 7) * (1 + intensity));
+  p.samp = (int16_t)constrain((int32_t)base.samp + da, 200, 300);
+
   if ((r & 15) == 0) p.seed ^= mix32(micros());
   return p;
 }
@@ -511,7 +537,7 @@ static void sortPopulation() {
 }
 
 // ===================== EEPROM =====================
-static const uint8_t EEPROM_MAGIC = 0xA5;
+static const uint8_t EEPROM_MAGIC = 0xB2;
 
 static void saveBest() {
   EEPROM.update(0, EEPROM_MAGIC);
@@ -529,21 +555,24 @@ static bool loadBest() {
 // ===================== setup =====================
 void setup() {
   Serial.begin(115200);
-  delay(400);                       // дать Serial открыться
-  while (!Serial && millis() < 2000) {;}  // на платах с нативным USB
+  delay(400);
+  while (!Serial && millis() < 2000) {;}
 
   Serial.println();
-  Serial.println(F("MatchWaves v2.1  (no WDT in setup)"));
+  Serial.println(F("MatchWaves v3 · dynamic sin · no LUT"));
   Serial.flush();
-
-  // Watchdog пока НЕ включаем
 
   uint32_t seed0 = micros() ^ 0xA5A5A5A5u;
   for (uint8_t i = 0; i < POP_SIZE; i++) {
-    pop[i].C     = 30000 + (mix32(seed0 + i) & 0x3FFF);
-    pop[i].V     = (int16_t)((mix32(seed0 + i * 3) & 0x1FF) - 256);
-    pop[i].adapt = 28000 + (mix32(seed0 + i * 7) & 0x3FFF);
-    pop[i].seed  = mix32(seed0 ^ (i * 0x9E3779B9u));
+    pop[i].C      = 30000 + (mix32(seed0 + i) & 0x3FFF);
+    pop[i].V      = (int16_t)((mix32(seed0 + i * 3) & 0x1FF) - 256);
+    pop[i].adapt  = 28000 + (mix32(seed0 + i * 7) & 0x3FFF);
+    pop[i].seed   = mix32(seed0 ^ (i * 0x9E3779B9u));
+    pop[i].sk1    = 402;
+    pop[i].sk2    = 64;
+    pop[i].sk3    = 10;
+    pop[i].sphase = 0;
+    pop[i].samp   = 256;
   }
 
   if (loadBest()) {
@@ -574,12 +603,21 @@ void setup() {
 
   Serial.print(F("initial best="));
   Serial.println(bestFit, 4);
+  Serial.print(F("sin k1="));
+  Serial.print(bestP.sk1);
+  Serial.print(F(" k2="));
+  Serial.print(bestP.sk2);
+  Serial.print(F(" k3="));
+  Serial.print(bestP.sk3);
+  Serial.print(F(" ph="));
+  Serial.print(bestP.sphase);
+  Serial.print(F(" amp="));
+  Serial.println(bestP.samp);
   Serial.println(F("Entering loop"));
   Serial.flush();
 
-  // Теперь можно включить watchdog (и сбрасывать его в loop)
 #if defined(__AVR__)
-  wdt_enable(WDTO_4S);              // 4 секунды — безопаснее
+  wdt_enable(WDTO_4S);
   wdtArmed = true;
 #endif
 
@@ -616,7 +654,17 @@ void loop() {
     stagnant = 0;
     saveBest();
     Serial.print(F("IMPROVED "));
-    Serial.println(bestFit, 4);
+    Serial.print(bestFit, 4);
+    Serial.print(F("  sin="));
+    Serial.print(bestP.sk1);
+    Serial.print(',');
+    Serial.print(bestP.sk2);
+    Serial.print(',');
+    Serial.print(bestP.sk3);
+    Serial.print(',');
+    Serial.print(bestP.sphase);
+    Serial.print(',');
+    Serial.println(bestP.samp);
   } else {
     stagnant++;
     for (uint8_t i = 0; i < ELITE; i++) {
@@ -631,6 +679,8 @@ void loop() {
 
   if (stagnant >= STAGNANT_MAX) {
     bestP.seed ^= mix32(micros() ^ 0x5A5A5A5Au);
+    // лёгкий толчок sin-параметров при ресееде
+    bestP.sphase = (int16_t)((bestP.sphase + 17) & 255);
     stagnant = 0;
     Serial.println(F("reseed"));
   }
