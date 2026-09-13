@@ -43,9 +43,9 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
 <div class="wrap">
   <h1>Smart Pattern ∞ · SSD Zero-Charge Mass Balancer</h1>
   <div class="sub">
-    Автоматическая балансировка зарядовой массы памяти SSD до <b>net charge = 0</b>
-    (положительные и отрицательные заряды уравнены по интегралу). 
-    Автооценка зарядовой массы в реальном времени.
+    Net charge → 0, волнорез, анти-дрожание, анти-резонанс, диссонанс.
+    Спины выровнены в одном направлении, «вращение вокруг спина» замедлено
+    (подавлена вихревая / орбитальная компонента поля).
   </div>
   <div class="card">
     <div class="grid">
@@ -60,10 +60,10 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
           <option>2048</option>
         </select>
       </div>
-      <div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" type="text" value="—" disabled></div>
-      <div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" type="text" value="—" disabled></div>
-      <div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" type="text" value="—" disabled></div>
-      <div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" type="text" value="—" disabled></div>
+      <div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" type="text" value="" disabled></div>
+      <div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" type="text" value="" disabled></div>
+      <div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" type="text" value="" disabled></div>
+      <div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" type="text" value="" disabled></div>
       <div><label>Seed</label><input id="seed" type="number" value="123456789"></div>
     </div>
     <div class="mode-card">
@@ -110,7 +110,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
   </div>
   <div class="two">
     <div class="card">
-      <div class="hint" style="margin-bottom:8px">2D pattern · синий = + · красный = − · net charge → 0</div>
+      <div class="hint" style="margin-bottom:8px">2D pattern · spin-aligned · slow orbital · net=0 · anti-resonance</div>
       <div class="view"><canvas id="cv" width="512" height="512"></canvas></div>
       <div class="pills">
         <span class="pill" id="backend">backend —</span>
@@ -253,23 +253,184 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
       mean: net / n
     };
   }
-  // Принудительная балансировка до net charge = 0
-  // и выравнивание положительной/отрицательной массы
-  function enforceZeroChargeMass(a, N) {
+  // --- Уменьшение дрожания заряда ---
+  function reduceChargeJitter(a, N) {
+    for (let pass = 0; pass < 2; pass++) {
+      const tmp = new Float32Array(a);
+      for (let y = 1; y < N - 1; y++) {
+        for (let x = 1; x < N - 1; x++) {
+          const i = y * N + x;
+          const nb = [
+            tmp[i-N-1], tmp[i-N], tmp[i-N+1],
+            tmp[i-1], tmp[i], tmp[i+1],
+            tmp[i+N-1], tmp[i+N], tmp[i+N+1]
+          ];
+          nb.sort((p, q) => p - q);
+          const med = nb[4];
+          let sum = 0;
+          for (let k = 0; k < 9; k++) sum += nb[k];
+          a[i] = med * 0.55 + (sum / 9) * 0.45;
+        }
+      }
+    }
+  }
+
+  // --- Нейтрализация резонанса ---
+  function neutralizeResonance(a, N) {
+    const F = fft2D(a, N);
+    const bins = new Float32Array(N / 2 + 1);
+    const cnt = new Uint32Array(N / 2 + 1);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const r = Math.min(N >> 1, Math.hypot(x - N / 2, y - N / 2) | 0);
+      bins[r] += Math.hypot(F.re[y * N + x], F.im[y * N + x]);
+      cnt[r]++;
+    }
+    for (let r = 0; r < bins.length; r++) bins[r] /= Math.max(1, cnt[r]);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const r = Math.min(N >> 1, Math.hypot(x - N / 2, y - N / 2) | 0);
+      if (r < 3) continue;
+      const mag = Math.hypot(F.re[y * N + x], F.im[y * N + x]);
+      const ref = bins[r] + 1e-9;
+      if (mag > ref * 1.55) {
+        const atten = Math.max(0.05, 1 - (mag / ref - 1.55) / 2.2);
+        F.re[y * N + x] *= atten;
+        F.im[y * N + x] *= atten;
+      }
+    }
+    for (let y = 0; y < N; y++) {
+      const r = new Float32Array(N), im = new Float32Array(N);
+      for (let x = 0; x < N; x++) { r[x] = F.re[y * N + x]; im[x] = F.im[y * N + x]; }
+      fft1(r, im, true);
+      for (let x = 0; x < N; x++) { F.re[y * N + x] = r[x]; F.im[y * N + x] = im[x]; }
+    }
+    for (let x = 0; x < N; x++) {
+      const r = new Float32Array(N), im = new Float32Array(N);
+      for (let y = 0; y < N; y++) { r[y] = F.re[y * N + x]; im[y] = F.im[y * N + x]; }
+      fft1(r, im, true);
+      for (let y = 0; y < N; y++) a[y * N + x] = r[y];
+    }
+  }
+
+  // --- Диссонанс: успокоение когерентных колебаний ---
+  function applyDissonanceDamping(a, N, seed) {
+    const phi = 1.61803398875, psi = 1.41421356237, eps = 0.045;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const i = y * N + x;
+      const d1 = Math.sin(2 * Math.PI * (x * phi + y * psi) / N + (seed & 255) * 0.01);
+      const d2 = Math.cos(2 * Math.PI * (x * psi - y * phi) / (N * 1.37));
+      a[i] = a[i] * (1 - eps) + a[i] * d1 * d2 * eps * 0.7;
+    }
+  }
+
+  // --- Подавление частот ---
+  function killAllFrequencies(a, N) {
+    const F = fft2D(a, N);
+    const maxR = Math.max(2, (N * 0.022) | 0);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const dx = Math.min(x, N - x), dy = Math.min(y, N - y);
+      const r = Math.hypot(dx, dy);
+      if (r > maxR) { F.re[y * N + x] = 0; F.im[y * N + x] = 0; }
+      else if (r > 1) {
+        const k = 1 - (r - 1) / (maxR - 1 + 1e-6);
+        F.re[y * N + x] *= k * k;
+        F.im[y * N + x] *= k * k;
+      }
+    }
+    for (let y = 0; y < N; y++) {
+      const r = new Float32Array(N), im = new Float32Array(N);
+      for (let x = 0; x < N; x++) { r[x] = F.re[y * N + x]; im[x] = F.im[y * N + x]; }
+      fft1(r, im, true);
+      for (let x = 0; x < N; x++) { F.re[y * N + x] = r[x]; F.im[y * N + x] = im[x]; }
+    }
+    for (let x = 0; x < N; x++) {
+      const r = new Float32Array(N), im = new Float32Array(N);
+      for (let y = 0; y < N; y++) { r[y] = F.re[y * N + x]; im[y] = F.im[y * N + x]; }
+      fft1(r, im, true);
+      for (let y = 0; y < N; y++) a[y * N + x] = r[y];
+    }
+  }
+
+  // --- Выравнивание спинов в одном направлении ---
+  // Спин-поле: знак и величина a[i] интерпретируются как проекция спина.
+  // Цель — максимальная когерентность направления (все спины «смотрят» примерно в одну сторону).
+  function alignSpins(a, N) {
+    // 1. Определяем доминирующее направление (знак большинства / mean sign)
+    let pos = 0, neg = 0;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] > 0.02) pos++;
+      else if (a[i] < -0.02) neg++;
+    }
+    const preferPositive = pos >= neg;
+
+    // 2. Мягко переворачиваем меньшинство в сторону большинства
+    //    (сохраняем |величину|, меняем только ориентацию)
+    for (let i = 0; i < a.length; i++) {
+      if (preferPositive && a[i] < 0) {
+        a[i] = -a[i] * 0.72; // частично переворачиваем, не резко
+      } else if (!preferPositive && a[i] > 0) {
+        a[i] = -a[i] * 0.72;
+      }
+    }
+
+    // 3. Локальное выравнивание: каждый спин подтягивается к соседям
+    const tmp = new Float32Array(a);
+    for (let y = 1; y < N - 1; y++) {
+      for (let x = 1; x < N - 1; x++) {
+        const i = y * N + x;
+        const local = (tmp[i-N] + tmp[i-1] + tmp[i] + tmp[i+1] + tmp[i+N]) / 5;
+        // 65% к локальному консенсусу направления
+        a[i] = tmp[i] * 0.35 + local * 0.65;
+      }
+    }
+  }
+
+  // --- Замедление «вращения вокруг спина» (орбитальной/вихревой компоненты) ---
+  // В 2D-поле это подавление curl / циркуляции: убираем вращательные паттерны,
+  // оставляя более радиально-симметричное и медленное распределение.
+  function slowOrbitalRotation(a, N) {
+    // Оценка локального «вихря» (дискретный curl) и его гашение
+    const tmp = new Float32Array(a);
+    for (let y = 1; y < N - 1; y++) {
+      for (let x = 1; x < N - 1; x++) {
+        const i = y * N + x;
+        // приближённый 2D curl: dAy/dx - dAx/dy
+        const dAy_dx = (tmp[i + 1] - tmp[i - 1]) * 0.5;
+        const dAx_dy = (tmp[i + N] - tmp[i - N]) * 0.5;
+        const curl = dAy_dx - dAx_dy;
+        // вычитаем часть вихревой составляющей → замедляем «вращение»
+        a[i] = tmp[i] - curl * 0.28;
+      }
+    }
+
+    // Дополнительно: сильное низкочастотное сглаживание гасит быстрые орбитальные моды
+    for (let pass = 0; pass < 2; pass++) {
+      const t2 = new Float32Array(a);
+      for (let y = 1; y < N - 1; y++) {
+        for (let x = 1; x < N - 1; x++) {
+          const i = y * N + x;
+          const local = (t2[i-N-1] + t2[i-N] + t2[i-N+1] +
+                         t2[i-1] + t2[i] + t2[i+1] +
+                         t2[i+N-1] + t2[i+N] + t2[i+N+1]) / 9;
+          a[i] = t2[i] * 0.40 + local * 0.60;
+        }
+      }
+    }
+  }
+
+  // Полный конвейер: zero-charge + anti-jitter + anti-resonance +
+  // dissonance + spin align + slow orbital + kill frequencies
+  function enforceZeroChargeMass(a, N, seed) {
     const n = a.length;
-    // 1. Убираем mean → net = 0
     let mean = 0;
     for (let i = 0; i < n; i++) mean += a[i];
     mean /= n;
     for (let i = 0; i < n; i++) a[i] -= mean;
-    // 2. Считаем текущие массы
+
     let posMass = 0, negMass = 0;
     for (let i = 0; i < n; i++) {
       if (a[i] > 0) posMass += a[i];
       else negMass += -a[i];
     }
-    // 3. Если массы не равны — масштабируем меньшую сторону вверх
-    //    (или большую вниз), чтобы posMass == negMass
     if (posMass > 1e-8 && negMass > 1e-8) {
       const target = (posMass + negMass) * 0.5;
       const posScale = target / posMass;
@@ -279,22 +440,39 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         else a[i] *= negScale;
       }
     }
-    // 4. Лёгкое локальное сглаживание, чтобы не было артефактов
-    const tmp = new Float32Array(a);
-    for (let y = 1; y < N - 1; y++) {
-      for (let x = 1; x < N - 1; x++) {
-        const i = y * N + x;
-        const local = (tmp[i-N-1]+tmp[i-N]+tmp[i-N+1] + tmp[i-1]+tmp[i]+tmp[i+1] + tmp[i+N-1]+tmp[i+N]+tmp[i+N+1]) / 9;
-        a[i] = tmp[i] * 0.78 + local * 0.22;
-      }
-    }
-    // 5. Финальный mean-removal (на случай накопления ошибки)
+
+    reduceChargeJitter(a, N);
+    neutralizeResonance(a, N);
+    applyDissonanceDamping(a, N, seed || 0);
+
+    // спины в одном направлении + замедление вращения вокруг спина
+    alignSpins(a, N);
+    slowOrbitalRotation(a, N);
+
+    killAllFrequencies(a, N);
+
+    // финальный mean + баланс масс
     mean = 0;
     for (let i = 0; i < n; i++) mean += a[i];
     mean /= n;
     for (let i = 0; i < n; i++) a[i] -= mean;
-    // 6. Мягкий clip
-    for (let i = 0; i < n; i++) a[i] = Math.tanh(a[i] * 1.05);
+
+    posMass = 0; negMass = 0;
+    for (let i = 0; i < n; i++) {
+      if (a[i] > 0) posMass += a[i];
+      else negMass += -a[i];
+    }
+    if (posMass > 1e-8 && negMass > 1e-8) {
+      const target = (posMass + negMass) * 0.5;
+      const posScale = target / posMass;
+      const negScale = target / negMass;
+      for (let i = 0; i < n; i++) {
+        if (a[i] > 0) a[i] *= posScale;
+        else a[i] *= negScale;
+      }
+    }
+
+    for (let i = 0; i < n; i++) a[i] = Math.tanh(a[i] * 1.02);
   }
   function makeBase(N, seed, gen) {
     const a = new Float32Array(N * N);
@@ -455,7 +633,7 @@ details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}summar
         }
         // === КЛЮЧЕВОЙ ШАГ: SSD Zero-Charge Mass ===
         if (ssdZero) {
-          enforceZeroChargeMass(a, N);
+          enforceZeroChargeMass(a, N, s);
         }
         const met = metricsFromFloat(a, N, cfg.fw, cfg.mw, mode, ssdZero);
         const node = { id: treeNodes.length, parent: elite.length ? elite[c%elite.length].id : null,
