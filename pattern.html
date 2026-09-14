@@ -19,3 +19,392 @@ button:hover:not(:disabled){background:var(--a2)}button.s{background:#e8eef7;col
 .view{background:#0f1419;border:1px solid #c5d0e0;border-radius:12px;overflow:hidden;aspect-ratio:1/1}.view canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
 .stat{background:#f5f8fc;border:1px solid #dce3ed;border-radius:10px;padding:8px 10px;font-size:11px;color:var(--muted)}.stat b{display:block;color:var(--text);font-size:13px;margin-top:3px}
 .log{background:#f8fafc;border:1px solid #dce3ed;border-radius:10px;min-height:90px;max-height:220px;overflow:auto;padding:10px 12px;font:11px/1.5 ui-monospace,Consolas,monospace;color:#334155}
+.ok{color:var(--ok)}.warn{color:var(--w)}.bad{color:var(--bad)}.pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.pill{font:11px ui-monospace,monospace;border:1px solid #cdd6e4;border-radius:99px;padding:4px 9px;color:#475569;background:#f1f5f9}
+.auto-badge{display:inline-block;background:#e6f7ef;color:#0d9f6e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;margin-left:6px}
+.mode-card{background:#f0f5ff;border:1px solid #c7d7f5;border-radius:10px;padding:10px 12px;margin-top:10px}.mode-card label{color:#1e3a6e;font-weight:600}
+.ssd-card{background:#f0faf5;border:1px solid #a8d5c0;border-radius:10px;padding:10px 12px;margin-top:10px}.ssd-card label{color:#0d6b4a;font-weight:600}
+.hint{font-size:11px;color:var(--muted)}.seed-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Smart Pattern ∞ v8 · Zero Signed-Mass Balancer</h1>
+<div class="sub">
+Автоматическая генерация и оптимизация 2D-паттерна с сохранением исходной логики:
+синусоидальные/квазипериодические компоненты + детерминированный шум → Breakwater → настоящий 2D FFT →
+удаление узких спектральных пиков → inverse FFT → мягкая нелинейность → Zero Signed-Mass.
+<br><b>Важно:</b> Zero-Charge здесь является математической моделью нулевой signed-массы паттерна; браузер не измеряет и не изменяет физический заряд NAND-ячеек SSD.
+</div>
+
+<div class="card">
+<div class="grid">
+<div><label>Размер <span class="auto-badge">FLEX</span></label>
+<select id="size"><option>256</option><option selected>512</option><option>768</option><option>1024</option><option>1536</option><option>2048</option></select></div>
+<div><label>Поколения <span class="auto-badge">AUTO</span></label><input id="steps" disabled></div>
+<div><label>Кандидатов <span class="auto-badge">AUTO</span></label><input id="cand" disabled></div>
+<div><label>Elite <span class="auto-badge">AUTO</span></label><input id="elite" disabled></div>
+<div><label>Patience <span class="auto-badge">AUTO</span></label><input id="patience" disabled></div>
+<div class="seed-row"><div><label>Seed <span class="auto-badge">RANDOM</span></label><input id="seed" type="number"></div><button id="newSeed" class="s">Новый Seed</button></div>
+</div>
+
+<div class="mode-card"><label>Режим R/W</label>
+<select id="rwMode"><option value="balanced" selected>Balanced — равная скорость чтения/записи</option><option value="write_fast">Write faster</option><option value="read_fast">Read faster</option></select></div>
+
+<div class="ssd-card"><label><input type="checkbox" id="ssdZero" checked style="width:auto;margin-right:8px;vertical-align:middle">
+Zero Signed-Mass — net ≈ 0</label>
+<div class="hint">После каждой FFT-генерации выполняется mean removal, нелинейность, повторное mean removal и точная float-коррекция суммы. При net = 0 положительная и отрицательная signed-масса равны.</div></div>
+
+<div class="hint" style="margin-top:12px">Параметры ядра <span class="auto-badge">AUTO</span></div>
+<div class="grid" style="margin-top:10px">
+<div><label>Notch</label><input id="notch" type="range" min="1.2" max="8" step=".05" disabled></div>
+<div><label>Width</label><input id="width" type="range" min="1" max="12" step=".5" disabled></div>
+<div><label>Breakwater</label><input id="break" type="range" min="0" max="1" step=".01" disabled></div>
+<div><label>FFT weight</label><input id="fw" type="range" min="0" max="1" step=".01" disabled></div>
+<div><label>Memory weight</label><input id="mw" type="range" min="0" max="1" step=".01" disabled></div>
+</div>
+
+<div class="row"><button id="start">Запустить генерацию</button><button id="stop" class="s" disabled>Стоп</button><button id="clear" class="s">Очистить</button></div>
+<div class="row"><button id="png" class="s" disabled>PNG</button><button id="raw" class="s" disabled>RAW .bin</button><button id="tree" class="s" disabled>Tree JSON</button><button id="ino" class="s">Arduino .ino</button></div>
+<div class="bar"><i id="prog"></i></div><div id="cap" class="hint" style="margin-top:8px"></div>
+</div>
+
+<div class="two">
+<div class="card"><div class="hint" style="margin-bottom:8px">2D pattern · синий = + · красный = − · signed mass → 0</div>
+<div class="view"><canvas id="cv" width="512" height="512"></canvas></div>
+<div class="pills"><span class="pill" id="backend">backend —</span><span class="pill" id="modePill">mode —</span><span class="pill" id="ssdPill">Zero Mass</span></div></div>
+<div class="card"><div class="hint" style="margin-bottom:8px">Автооценка</div><div class="grid">
+<div class="stat">Status<b id="status">idle</b></div><div class="stat">Generation<b id="gen">—</b></div><div class="stat">Score<b id="score">—</b></div>
+<div class="stat">Net Mass<b id="netCh">—</b></div><div class="stat">Abs Mass<b id="chMass">—</b></div><div class="stat">+ / − Mass<b id="pmass">—</b></div>
+<div class="stat">Balance<b id="balQ">—</b></div><div class="stat">Read / Write<b id="rwSp">—</b></div><div class="stat">Best<b id="best">—</b></div><div class="stat">Nodes / Size<b id="nodes">0</b></div>
+</div></div></div>
+
+<div class="card"><div class="hint" style="margin-bottom:8px">Лог</div><div id="log" class="log"></div></div>
+</div>
+
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d',{alpha:false}),logEl=$('log');
+let active=false,best=null,treeNodes=[],currentN=512;
+
+function log(s,c=''){const d=document.createElement('div');d.className=c;d.textContent=`[${new Date().toLocaleTimeString()}] ${s}`;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight}
+const ui=(id,v)=>$(id).textContent=v;
+$('cap').textContent=`WASM: ${typeof WebAssembly==='object'?'yes':'n/a'} · threads: ${navigator.hardwareConcurrency||'?'} · RAM hint: ${navigator.deviceMemory||'?'} GB`;
+
+function secureSeed(){
+  const a=new Uint32Array(2);
+  if(crypto&&crypto.getRandomValues)crypto.getRandomValues(a);
+  else {a[0]=(Date.now()>>>0);a[1]=((performance.now()*1000000)>>>0);}
+  let s=(a[0]^a[1]^0x9e3779b9)>>>0;
+  s=rnd32(s);
+  return s===0?0x6d2b79f5:s;
+}
+function setNewSeed(reason='NEW SEED'){
+  const s=secureSeed();
+  $('seed').value=s;
+  log(`${reason}: ${s}`,'ok');
+  return s;
+}
+
+function autoConfig(N){
+  const cores=navigator.hardwareConcurrency||4,ram=navigator.deviceMemory||4,mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+  const scale=Math.max(.35,Math.min(1,512/N));
+  const budgetMs=mobile?Math.min(9000,4200+cores*500):Math.min(22000,7000+cores*700+ram*250);
+  const cand=Math.max(2,Math.min(6,Math.round(Math.sqrt(cores)*1.35*scale+1)));
+  const eliteN=Math.max(1,Math.min(3,Math.floor(cand*.4)));
+  const steps=Math.max(6,Math.min(32,Math.round(budgetMs/700*scale)));
+  return {N,steps,cand,eliteN,patience:Math.max(3,Math.round(steps*.22)),budgetMs,notch:2.3,width:2.8,breakk:.66,fw:.34,mw:.82};
+}
+
+function rnd32(x){x>>>=0;x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return(x^(x>>>16))>>>0}
+function noise(i,s){return ((rnd32((i^s)>>>0)&0xffffff)/16777215)*2-1}
+
+function fft1(re,im,inverse=false){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
+  for(let len=2;len<=n;len<<=1){
+    const ang=(inverse?2:-2)*Math.PI/len,wr0=Math.cos(ang),wi0=Math.sin(ang);
+    for(let i=0;i<n;i+=len){let wr=1,wi=0,half=len>>1;
+      for(let j=0;j<half;j++){const u=i+j,v=u+half,tr=re[v]*wr-im[v]*wi,ti=re[v]*wi+im[v]*wr;
+        re[v]=re[u]-tr;im[v]=im[u]-ti;re[u]+=tr;im[u]+=ti;
+        const q=wr*wr0-wi*wi0;wi=wr*wi0+wi*wr0;wr=q;
+      }
+    }
+  }
+  if(inverse)for(let i=0;i<n;i++){re[i]/=n;im[i]/=n}
+}
+
+/* Correct 2D FFT: FFT rows, then columns. Line buffers are reused. */
+function fft2D(data,N,inverse=false){
+  const re=new Float32Array(N*N),im=new Float32Array(N*N),lr=new Float32Array(N),li=new Float32Array(N);
+  re.set(data);
+  for(let y=0;y<N;y++){const off=y*N;for(let x=0;x<N;x++){lr[x]=re[off+x];li[x]=im[off+x]}fft1(lr,li,inverse);for(let x=0;x<N;x++){re[off+x]=lr[x];im[off+x]=li[x]}}
+  for(let x=0;x<N;x++){for(let y=0;y<N;y++){lr[y]=re[y*N+x];li[y]=im[y*N+x]}fft1(lr,li,inverse);for(let y=0;y<N;y++){re[y*N+x]=lr[y];im[y*N+x]=li[y]}}
+  return {re,im};
+}
+function freqRadius(x,y,N){
+  const fx=x<=N/2?x:x-N,fy=y<=N/2?y:y-N;
+  return Math.hypot(fx,fy);
+}
+function spectralClean(re,im,N,threshold,width){
+  const bins=new Float64Array(N/2+1),cnt=new Uint32Array(N/2+1);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){const r=Math.min(N/2,Math.floor(freqRadius(x,y,N)));const q=Math.hypot(re[y*N+x],im[y*N+x]);bins[r]+=q;cnt[r]++}
+  for(let r=0;r<bins.length;r++)bins[r]/=Math.max(1,cnt[r]);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const r=Math.min(N/2,Math.floor(freqRadius(x,y,N)));if(r<=2)continue;
+    const i=y*N+x,mag=Math.hypot(re[i],im[i]),ref=bins[r]+1e-6;
+    if(mag>ref*threshold){const k=Math.max(0,1-(mag/ref-threshold)/(threshold*width));re[i]*=k;im[i]*=k}
+  }
+}
+
+function inverseFromFFT(F,N){
+  const re=F.re,im=F.im,lr=new Float32Array(N),li=new Float32Array(N);
+  for(let x=0;x<N;x++){for(let y=0;y<N;y++){lr[y]=re[y*N+x];li[y]=im[y*N+x]}fft1(lr,li,true);for(let y=0;y<N;y++){re[y*N+x]=lr[y];im[y*N+x]=li[y]}}
+  for(let y=0;y<N;y++){const off=y*N;for(let x=0;x<N;x++){lr[x]=re[off+x];li[x]=im[off+x]}fft1(lr,li,true);for(let x=0;x<N;x++)re[off+x]=lr[x]}
+  return re;
+}
+
+/* Original pattern construction rules retained. */
+function makeBase(N,seed,gen){
+  const a=new Float32Array(N*N),phi=1.61803398875;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const i=y*N+x,t=2*Math.PI*phi*i/257+gen*.019;
+    let v=.21*Math.sin(t)+.14*Math.sin(t*.41+x*.014)+.11*Math.cos(t*.67+y*.016)
+      +.09*Math.sin(2*Math.PI*x/53+t*.04)+.07*Math.sin(2*Math.PI*y/89)
+      +.12*noise(i,seed)+.06*noise(i*3,seed^0x9e3779b9);
+    a[i]=Math.tanh(v*1.12);
+  }
+  return a;
+}
+function applyBreakwater(a,N,k){
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const i=y*N+x,xx=x/N,s=Math.max(0,Math.min(1,(xx-.08)/.2));
+    const crest=Math.max(0,1-Math.abs(xx-.62)/.09),harbor=Math.max(0,(xx-.72)/.28);
+    const bk=k*(.25*s+.55*crest),ck=.1+.8*harbor;
+    a[i]=Math.tanh(a[i]*(1-bk*.30)*(1-ck*.38)+Math.tanh(a[i])*.11*ck);
+  }
+}
+
+/* Exact floating-point signed-mass balancing. */
+function enforceZeroChargeMass(a,N){
+  if(!a.length)return;
+  let sum=0;for(let i=0;i<a.length;i++)sum+=a[i];
+  let mean=sum/a.length;for(let i=0;i<a.length;i++)a[i]-=mean;
+
+  let pos=0,neg=0;for(let i=0;i<a.length;i++){if(a[i]>0)pos+=a[i];else neg-=a[i]}
+  if(pos>1e-12&&neg>1e-12){
+    const target=(pos+neg)*.5,ps=target/pos,ns=target/neg;
+    for(let i=0;i<a.length;i++)a[i]=a[i]>0?a[i]*ps:a[i]*ns;
+  }
+
+  const tmp=new Float32Array(a);
+  for(let y=1;y<N-1;y++)for(let x=1;x<N-1;x++){
+    const i=y*N+x,local=(tmp[i-N-1]+tmp[i-N]+tmp[i-N+1]+tmp[i-1]+tmp[i]+tmp[i+1]+tmp[i+N-1]+tmp[i+N]+tmp[i+N+1])/9;
+    a[i]=tmp[i]*.78+local*.22;
+  }
+
+  sum=0;for(let i=0;i<a.length;i++)sum+=a[i];mean=sum/a.length;for(let i=0;i<a.length;i++)a[i]-=mean;
+  for(let i=0;i<a.length;i++)a[i]=Math.tanh(a[i]*1.05);
+
+  /* tanh changes the sum, so balance again. */
+  sum=0;for(let i=0;i<a.length;i++)sum+=a[i];mean=sum/a.length;for(let i=0;i<a.length;i++)a[i]-=mean;
+  /* Final residual correction. */
+  sum=0;for(let i=0;i<a.length;i++)sum+=a[i];
+  a[a.length-1]-=sum;
+}
+function assessChargeMass(a){
+  let pos=0,neg=0,net=0,abs=0;
+  for(let i=0;i<a.length;i++){const v=a[i];net+=v;abs+=Math.abs(v);if(v>0)pos+=v;else neg-=v}
+  const diff=Math.abs(pos-neg),q=1-Math.min(1,(Math.abs(net)*4+diff*2)/(abs+1e-6));
+  return {net,posMass:pos,negMass:neg,absMass:abs,balanceQ:Math.max(0,q),mean:net/a.length};
+}
+function measureMemoryRW(buf){
+  const work=new Float32Array(buf),trials=3,rt=[],wt=[];
+  for(let t=0;t<trials;t++){let sum=0,t0=performance.now();for(let i=0;i<work.length;i++)sum+=work[i];for(let i=0;i<work.length;i+=11)sum+=work[i];rt.push(performance.now()-t0);if(sum===1e9)log('')}
+  for(let t=0;t<trials;t++){let t0=performance.now();for(let i=0;i<work.length;i++)work[i]=work[i]*.998+.002;for(let i=0;i<work.length;i++)work[i]=buf[i];wt.push(performance.now()-t0)}
+  const avg=a=>a.reduce((x,y)=>x+y,0)/a.length,std=a=>{const m=avg(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)*(v-m),0)/a.length)};
+  const r=avg(rt),w=avg(wt),rj=std(rt),wj=std(wt);
+  return {readSpeed:1/(1+r*.16),writeSpeed:1/(1+w*.16),readStab:1/(1+rj*8),writeStab:1/(1+wj*8),ratio:w>1e-6?r/w:1};
+}
+function metricsFromFloat(a,N,fw,mw,mode,ssdZero,F){
+  const rw=measureMemoryRW(a),ch=assessChargeMass(a);
+  let peak=0,sum=0;
+  for(let i=0;i<F.re.length;i++){const q=Math.hypot(F.re[i],F.im[i]);sum+=q;if(q>peak)peak=q}
+  peak/=sum/F.re.length+1e-6;
+  let memScore;
+  if(mode==='write_fast')memScore=.55*rw.writeSpeed+.25*rw.writeStab+.12*rw.readSpeed+.08*rw.readStab;
+  else if(mode==='read_fast')memScore=.55*rw.readSpeed+.25*rw.readStab+.12*rw.writeSpeed+.08*rw.writeStab;
+  else{const bal=1-Math.min(1,Math.abs(rw.readSpeed-rw.writeSpeed)*2.1);memScore=.31*rw.readSpeed+.31*rw.writeSpeed+.14*rw.readStab+.14*rw.writeStab+.10*bal}
+  const chargeWeight=ssdZero?.38:.18;
+  const score=mw*.42*memScore+chargeWeight*ch.balanceQ+(.10+fw*.06)*(1/(1+peak/12))
+    +.08*((rw.readStab+rw.writeStab)/2)+(ssdZero?.12*(1-Math.min(1,Math.abs(ch.net)*80)):.05);
+  return {score,memScore,readSpeed:rw.readSpeed,writeSpeed:rw.writeSpeed,net:ch.net,absMass:ch.absMass,posMass:ch.posMass,negMass:ch.negMass,balanceQ:ch.balanceQ,mean:ch.mean,peak};
+}
+function render(buf,N){
+  const W=cv.width,H=cv.height,im=ctx.createImageData(W,H);
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++){
+    const x=Math.min(N-1,Math.floor(px*N/W)),y=Math.min(N-1,Math.floor(py*N/H)),v=buf[y*N+x],o=(py*W+px)*4;
+    if(v>=0){const t=Math.min(1,v*1.15);im.data[o]=25+(1-t)*175;im.data[o+1]=55+(1-t)*155;im.data[o+2]=175+t*80}
+    else{const t=Math.min(1,-v*1.15);im.data[o]=175+t*80;im.data[o+1]=35+(1-t)*135;im.data[o+2]=45+(1-t)*115}
+    im.data[o+3]=255;
+  }
+  ctx.putImageData(im,0,0);
+}
+function encodeBytes(a){const o=new Uint8Array(a.length);for(let i=0;i<a.length;i++)o[i]=Math.max(0,Math.min(255,((a[i]+1)*127.5)|0));return o)}
+
+async function yieldNow(){await new Promise(r=>setTimeout(r,0))}
+
+async function optimize(){
+  if(active)return;
+  active=true;$('start').disabled=true;$('stop').disabled=false;$('png').disabled=$('raw').disabled=$('tree').disabled=true;
+  const mode=$('rwMode').value,ssdZero=$('ssdZero').checked,N=+$('size').value,cfg=autoConfig(N),seed=(+$('seed').value>>>0);
+  currentN=N;best=null;treeNodes=[];
+  $('steps').value=cfg.steps;$('cand').value=cfg.cand;$('elite').value=cfg.eliteN;$('patience').value=cfg.patience;
+  $('notch').value=cfg.notch;$('width').value=cfg.width;$('break').value=cfg.breakk;$('fw').value=cfg.fw;$('mw').value=cfg.mw;
+  cv.width=512;cv.height=512;
+  ui('status','running');ui('backend','CPU · 2D FFT');ui('modePill',mode==='balanced'?'Balanced':mode==='write_fast'?'Write>':'Read>');ui('ssdPill',ssdZero?'Zero Mass ON':'Zero Mass OFF');
+  log(`Seed=${seed} · Size=${N} (${(N*N/1e6).toFixed(2)} M cells) · gens=${cfg.steps}`,'ok');
+  log(`Original pattern rules: base waves + deterministic noise + Breakwater + spectral notch + inverse FFT + smoothing + nonlinear balance`,'ok');
+  let elite=[],no=0,start=performance.now(),notch=cfg.notch,width=cfg.width,breakk=cfg.breakk;
+  for(let gen=1;gen<=cfg.steps&&active;gen++){
+    if(performance.now()-start>cfg.budgetMs)break;
+    ui('gen',`${gen}/${cfg.steps}`);$('prog').style.width=`${(gen-1)/cfg.steps*100}%`;
+    if(gen%4===0){
+      const rs=rnd32(seed^Math.imul(gen,0x9e3779b9));
+      const r1=((rs&65535)/65535)-.5,r2=(((rs>>>8)&65535)/65535)-.5,r3=(((rs>>>16)&65535)/65535)-.5;
+      notch=Math.max(1.8,Math.min(4,notch+r1*.2));width=Math.max(1.7,Math.min(5.2,width+r2*.3));breakk=Math.max(.5,Math.min(.85,breakk+r3*.05));
+    }
+    const results=[];
+    for(let c=0;c<cfg.cand&&active;c++){
+      const s=rnd32(seed^Math.imul(gen,0x9e3779b9)^Math.imul(c,0x85ebca6b));
+      let a=makeBase(N,s,gen);
+      if(c&&elite.length){const parent=elite[c%elite.length].a;for(let i=0;i<a.length;i++)a[i]=.66*parent[i]+.34*a[i]}
+      applyBreakwater(a,N,breakk);
+      const F=fft2D(a,N,false);
+      spectralClean(F.re,F.im,N,notch,width);
+      const spatial=inverseFromFFT(F,N);
+      for(let i=0;i<a.length;i++)a[i]=Math.tanh(spatial[i]);
+      if(ssdZero)enforceZeroChargeMass(a,N);
+      const met=metricsFromFloat(a,N,cfg.fw,cfg.mw,mode,ssdZero,F);
+      const parentId=elite.length?elite[c%elite.length].id:null;
+      const node={id:treeNodes.length,parent:parentId,gen,score:met.score,metrics:met,seed:s,a,mode,ssdZero};
+      results.push(node);treeNodes.push({...node,a:null});
+      if(!best||met.score>best.score)best=node;
+      ui('nodes',`${treeNodes.length} / ${N}²`);ui('score',met.score.toFixed(5));ui('netCh',met.net.toExponential(2));
+      ui('chMass',met.absMass.toFixed(1));ui('pmass',`${met.posMass.toFixed(1)} / ${met.negMass.toFixed(1)}`);ui('balQ',met.balanceQ.toFixed(5));
+      ui('rwSp',`${met.readSpeed.toFixed(3)} / ${met.writeSpeed.toFixed(3)}`);render(a,N);
+      await yieldNow();
+    }
+    results.sort((a,b)=>b.score-a.score);elite.push(...results.slice(0,cfg.eliteN));elite.sort((a,b)=>b.score-a.score);elite=elite.slice(0,cfg.eliteN);
+    if(best&&elite[0]&&elite[0].id===best.id){no=0;ui('best',best.score.toFixed(5));log(`GEN ${gen}: BEST ${best.score.toFixed(5)} · net=${best.metrics.net.toExponential(3)} · bal=${best.metrics.balanceQ.toFixed(5)}`,'ok')}
+    else{no++;log(`GEN ${gen}: no improvement ${no}/${cfg.patience}`,'warn')}
+    if(no>=cfg.patience&&gen>=5){log('Early stop','warn');break}
+  }
+  if(best){render(best.a,N);$('png').disabled=$('raw').disabled=$('tree').disabled=false;ui('status','ready');const ch=assessChargeMass(best.a);log(`Готово · ${((performance.now()-start)/1000).toFixed(1)} s · net=${ch.net.toExponential(6)} · +/−=${ch.posMass.toFixed(2)}/${ch.negMass.toFixed(2)} · balance=${ch.balanceQ.toFixed(6)}`,'ok')}
+  else ui('status','stopped');
+  active=false;$('start').disabled=false;$('stop').disabled=true;$('prog').style.width='100%';
+}
+function stop(){active=false;ui('status','stopping…');log('Стоп','warn')}
+function clearTree(){treeNodes=[];best=null;ui('nodes','0');ui('best','—');ui('score','—');ui('netCh','—');log('Очищено')}
+
+function download(data,name,type='application/octet-stream'){const u=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),800)}
+
+function buildArduinoSketch(){
+return `// Smart Pattern Infinity v8 - Zero Signed-Mass model
+// Generated by the browser UI.
+#include <Arduino.h>
+#include <EEPROM.h>
+#if defined(__AVR__)
+#include <avr/wdt.h>
+#endif
+#if defined(ESP32)
+#define PAT_LEN 1024
+#define POP_SIZE 6
+#elif defined(ARDUINO_ARCH_RP2040)
+#define PAT_LEN 512
+#define POP_SIZE 5
+#elif defined(__AVR__)
+#define PAT_LEN 192
+#define POP_SIZE 3
+#else
+#define PAT_LEN 512
+#define POP_SIZE 5
+#endif
+#define SSD_ZERO_CHARGE ${$('ssdZero').checked?1:0}
+
+struct Params{uint16_t smooth,adapt,wave,breakw,noise;int16_t drive;uint32_t seed;uint16_t phase;};
+static int8_t pattern[PAT_LEN];static Params pop[POP_SIZE],bestP;static float fit[POP_SIZE],bestFit=1e30f;static uint32_t stepId=0;static uint16_t stagnant=0;
+static inline uint32_t mix32(uint32_t x){x+=0x9E3779B9u;x=(x^(x>>16))*0x85EBCA6Bu;x=(x^(x>>13))*0xC2B2AE35u;return x^(x>>16);}
+static inline float clampf(float x,float a,float b){return x<a?a:(x>b?b:x);}
+static inline float fsin(float x){while(x>3.14159265f)x-=6.28318531f;while(x<-3.14159265f)x+=6.28318531f;return 1.27323954f*x-.405284735f*x*fabsf(x);}
+static void forceZeroSum(){
+#if SSD_ZERO_CHARGE
+  int32_t sum=0;for(uint16_t i=0;i<PAT_LEN;i++)sum+=pattern[i];
+  if(sum==0)return;
+  int32_t c=-sum;
+  for(uint16_t i=0;i<PAT_LEN&&c!=0;i++){
+    int16_t v=pattern[i];
+    if(c>0&&v<127){int16_t d=(int16_t)min<int32_t>(127-v,c);pattern[i]=v+d;c-=d;}
+    else if(c<0&&v>-128){int16_t d=(int16_t)min<int32_t>(v+128,-c);pattern[i]=v-d;c+=d;}
+  }
+#endif
+}
+static void makePattern(const Params&p){
+  uint32_t s=mix32(p.seed^stepId);float sm=.40f+(p.smooth/65535.0f)*.48f,drv=.70f+p.drive*.00045f,adp=.70f+(p.adapt/65535.0f)*1.10f,wm=p.wave/65535.0f,bw=p.breakw/65535.0f,prev=0;
+  for(uint16_t i=0;i<PAT_LEN;i++){
+    float t=(float)i/PAT_LEN,w=0;for(uint8_t k=0;k<6;k++){float f=1.0f+k*.71f+p.phase*.00035f;w+=(1.0f/(1.0f+.14f*k))*fsin(6.28318531f*t*f);}w/=6.0f;
+    float n=((mix32(s+i)&65535)/65535.0f-.5f)*2.0f*(p.noise/65535.0f);
+    float v=adp*(.48f*w*wm+.22f*fsin(6.28318531f*t*2.6f+p.phase*.02f)+.09f*n);v=tanhf(v*drv);
+    float region=clampf((t-.08f)/.28f,0,1),crest=clampf(1.0f-fabsf(t-.57f)/.11f,0,1),harbor=clampf((t-.70f)/.28f,0,1);
+    float calm=bw*(.32f*region+.48f*crest+.30f*harbor);v-=(v-prev)*calm*.60f;v=v*(1.0f-calm*.32f)+prev*(calm*.32f);v=v*(1.0f-sm)+prev*sm;prev=v;
+    pattern[i]=(int8_t)constrain((int)(v*118.0f),-128,127);
+  }
+  #if SSD_ZERO_CHARGE
+  int32_t sum=0;for(uint16_t i=0;i<PAT_LEN;i++)sum+=pattern[i];int32_t mean=sum/(int32_t)PAT_LEN;
+  for(uint16_t i=0;i<PAT_LEN;i++)pattern[i]=(int8_t)constrain((int32_t)pattern[i]-mean,-128,127);
+  forceZeroSum();
+  #endif
+}
+static float measureRW(){
+  volatile int32_t sink=0;uint32_t r0=0,w0=0;uint16_t n=8;
+  for(uint16_t t=0;t<n;t++){uint32_t t0=micros();for(uint16_t i=0;i<PAT_LEN;i++)sink+=pattern[i];r0+=micros()-t0;}
+  for(uint16_t t=0;t<n;t++){uint32_t t0=micros();for(uint16_t i=0;i<PAT_LEN;i++)pattern[i]^=(int8_t)(i&15);for(uint16_t i=0;i<PAT_LEN;i++)pattern[i]^=(int8_t)(i&15);w0+=micros()-t0;}
+  float r=(float)r0/n,w=(float)w0/n,net=0;for(uint16_t i=0;i<PAT_LEN;i++)net+=pattern[i];
+  float pen=SSD_ZERO_CHARGE?fabsf(net)*.08f:0;
+  #if defined(MODE_WRITE_FAST)
+  return w*.68f+r*.18f+pen;
+  #elif defined(MODE_READ_FAST)
+  return r*.68f+w*.18f+pen;
+  #else
+  return (r+w)*.40f+fabsf(r-w)*.22f+pen;
+  #endif
+}
+static float evaluate(const Params&p){makePattern(p);return measureRW();}
+static Params mutate(Params p,uint8_t level){uint32_t r=mix32(p.seed^stepId^(uint32_t)level*0x9E37u);float k=level==0?.05f:(level==1?.12f:.24f);
+p.smooth=(uint16_t)constrain((int32_t)p.smooth+((int)(r&255)-128)*k*480,0,65535);
+p.adapt=(uint16_t)constrain((int32_t)p.adapt+((int)((r>>8)&255)-128)*k*480,0,65535);
+p.wave=(uint16_t)constrain((int32_t)p.wave+((int)((r>>16)&255)-128)*k*480,0,65535);
+p.breakw=(uint16_t)constrain((int32_t)p.breakw+((int)((r>>24)&255)-128)*k*480,0,65535);
+p.noise=(uint16_t)constrain((int32_t)p.noise+((int)(mix32(r)&255)-128)*k*380,0,65535);
+p.drive=(int16_t)constrain((int32_t)p.drive+((int)((mix32(r>>1)&255))-128)*k*9,-1800,1800);
+p.phase=(p.phase+((r>>9)&31)-15)&1023;if(!(r&31))p.seed=mix32(p.seed^r);return p;}
+static void sortPop(){for(uint8_t i=0;i<POP_SIZE;i++)for(uint8_t j=i+1;j<POP_SIZE;j++)if(fit[j]<fit[i]){float f=fit[i];fit[i]=fit[j];fit[j]=f;Params p=pop[i];pop[i]=pop[j];pop[j]=p;}}
+static void initP(Params&p,uint32_t s){p.smooth=34000+(mix32(s)&11000);p.adapt=31000+(mix32(s+1)&16000);p.wave=39000+(mix32(s+2)&17000);p.breakw=41000+(mix32(s+3)&16000);p.noise=7000+(mix32(s+4)&11000);p.drive=80+(mix32(s+5)&280);p.seed=mix32(s+6);p.phase=mix32(s+7)&1023;}
+void setup(){Serial.begin(115200);uint32_t s=micros()^0xC001D00Du;for(uint8_t i=0;i<POP_SIZE;i++)initP(pop[i],s+i*0x9E3779B9u);for(uint8_t i=0;i<POP_SIZE;i++)fit[i]=evaluate(pop[i]);sortPop();bestP=pop[0];bestFit=fit[0];Serial.println(F("Smart Pattern v8 READY"));}
+void loop(){stepId++;uint8_t level=stagnant>7?2:(stagnant>3?1:0);for(uint8_t i=1;i<POP_SIZE;i++)pop[i]=mutate(bestP,level);for(uint8_t i=0;i<POP_SIZE;i++)fit[i]=evaluate(pop[i]);sortPop();if(fit[0]<bestFit-.015f){bestFit=fit[0];bestP=pop[0];stagnant=0;Serial.print(F("IMPROVED "));Serial.println(bestFit,3);}else if(++stagnant>14){bestP.seed=mix32(bestP.seed^micros()^stepId);bestP.phase=(bestP.phase+41)&1023;stagnant=0;Serial.println(F("AUTO RESEED"));}delay(15);}
+`;
+}
+
+$('newSeed').onclick=()=>setNewSeed();
+$('start').onclick=()=>{setNewSeed('GENERATION SEED');optimize().catch(e=>{active=false;log(e.stack||String(e),'bad');ui('status','error');$('start').disabled=false;$('stop').disabled=true})};
+$('stop').onclick=stop;$('clear').onclick=clearTree;
+$('png').onclick=()=>{if(!best)return;const N=currentN,tmp=document.createElement('canvas');tmp.width=N;tmp.height=N;const c=tmp.getContext('2d'),im=c.createImageData(N,N),b=encodeBytes(best.a);for(let i=0;i<b.length;i++){const o=i*4,v=b[i];im.data[o]=v;im.data[o+1]=v;im.data[o+2]=v;im.data[o+3]=255}c.putImageData(im,0,0);tmp.toBlob(x=>download(x,`smart_pattern_v8_${N}.png`,'image/png'))};
+$('raw').onclick=()=>best&&download(encodeBytes(best.a),`smart_pattern_v8_${currentN}.bin`);
+$('tree').onclick=()=>best&&download(JSON.stringify({version:8,mode:$('rwMode').value,zeroSignedMass:$('ssdZero').checked,N:currentN,seed:+$('seed').value,bestScore:best.score,metrics:best.metrics,nodes:treeNodes.map(x=>({id:x.id,parent:x.parent,gen:x.gen,score:x.score,metrics:x.metrics,seed:x.seed}))},null,2),'tree_smart_pattern_v8.json','application/json');
+$('ino').onclick=()=>{let code=buildArduinoSketch(),mode=$('rwMode').value;if(mode==='write_fast')code='#define MODE_WRITE_FAST\n'+code;else if(mode==='read_fast')code='#define MODE_READ_FAST\n'+code;download(code,'SmartPattern_v8_ZeroSignedMass.ino','text/plain')};
+
+setNewSeed('PAGE LOAD');
+ui('backend','CPU · 2D FFT');ctx.fillStyle='#0f1419';ctx.fillRect(0,0,512,512);
+})();
+</script>
+</body>
+</html>
